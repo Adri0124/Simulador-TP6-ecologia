@@ -218,20 +218,40 @@
             display: block;
             text-align: center;
         }
+
+        .time-box {
+            background: #0f172a;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        .time-box .year {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #38bdf8;
+        }
+
+        .time-box .subtime {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+        }
     </style>
 </head>
 <body>
 
 <div class="header">
     <h1>Simulador de Sistemas Productivos Agroecológicos</h1>
-    <p>Comparativa: Monocultivo | Policultivo | Pastoreo bajo Monte (MBGI)</p>
+    <p>Escalas Temporales Adaptativas: Cultivos (1 Año) | Monte / Bosque (20 Años)</p>
 </div>
 
+<!-- Solo Sistemas Productivos en las Pestañas Principales -->
 <div class="preset-bar">
-    <button id="btnPresetMonocultura" class="btn-preset active">1. Monocultivo</button>
-    <button id="btnPresetPolicultivo" class="btn-preset">2. Policultivo</button>
-    <button id="btnPresetSilvopastoril" class="btn-preset">3. Pastoreo bajo Monte</button>
-    <button id="btnPresetGradient" class="btn-preset">Gradiente Topográfico</button>
+    <button id="btnPresetMonocultura" class="btn-preset active">1. Monocultivo (1 Año)</button>
+    <button id="btnPresetPolicultivo" class="btn-preset">2. Policultivo (1 Año)</button>
+    <button id="btnPresetSilvopastoril" class="btn-preset">3. Pastoreo bajo Monte / MBGI (20 Años)</button>
 </div>
 
 <div class="container">
@@ -242,15 +262,15 @@
                 <strong>Monocultivo Comercial:</strong> Siembra uniforme de cultivo principal (E1). Sensible a invasión por malezas (E2).
             </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <span style="font-size: 0.8rem; color: var(--text-sub);">CONTROL TEMPORAL</span>
-                <span id="stepCounter" style="font-size: 0.8rem; font-weight: bold; color: #38bdf8;">Tiempo: 0 ciclos</span>
+            <div class="time-box">
+                <div class="year" id="yearCounter">Año 0 / 1</div>
+                <div class="subtime" id="subTimeCounter">Mes 0 (Ciclo 0 de 12)</div>
             </div>
 
             <div class="btn-grid">
                 <button id="btnPlay" class="btn-play">▶ Iniciar</button>
                 <button id="btnPause" class="btn-pause">⏸ Pausa</button>
-                <button id="btnStep" class="btn-step">⏭ Paso</button>
+                <button id="btnStep" class="btn-step">⏭ Paso (+1 mes)</button>
                 <button id="btnReset" class="btn-reset">🔄 Reiniciar</button>
             </div>
 
@@ -264,7 +284,7 @@
             <span style="font-size: 0.8rem; color: var(--text-sub); font-weight: bold; display: block; margin-bottom: 10px;">FACTORES AMBIENTALES DINÁMICOS</span>
             
             <div class="control-group">
-                <label>Precipitación / Humedad <span id="valMoisture">70%</span></label>
+                <label>Precipitación / Humedad Base <span id="valMoisture">70%</span></label>
                 <input type="range" id="sliderMoisture" min="0" max="100" value="70">
             </div>
 
@@ -272,17 +292,11 @@
                 <label>Nutrientes del Suelo <span id="valNutrients">80%</span></label>
                 <input type="range" id="sliderNutrients" min="0" max="100" value="80">
             </div>
-
-            <div class="control-group">
-                <label style="justify-content: flex-start; gap: 8px; cursor: pointer;">
-                    <input type="checkbox" id="chkGradient"> Activar Gradiente Topográfico
-                </label>
-            </div>
         </div>
 
         <!-- MANEJO Y DISTURBIOS DINÁMICOS -->
         <div class="card">
-            <span style="font-size: 0.8rem; color: var(--text-sub); font-weight: bold; display: block; margin-bottom: 6px;">ESTRATEGIA DE MANEJO</span>
+            <span style="font-size: 0.8rem; color: var(--text-sub); font-weight: bold; display: block; margin-bottom: 6px;">ESTRATEGIA DE MANEJO Y TOPOGRAFÍA</span>
             <span id="activeRegimeLabel" class="regime-label">Régimen: Estándar / Sin Intervención</span>
             
             <div class="control-group">
@@ -291,7 +305,7 @@
             </div>
 
             <div id="dynamicManagementControls" class="btn-grid-single">
-                <!-- Se genera dinámicamente -->
+                <!-- Se genera dinámicamente según el sistema -->
             </div>
         </div>
     </div>
@@ -331,7 +345,7 @@
 
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <span style="font-size: 0.85rem; font-weight: bold; color: var(--text-sub);">Evolución Temporal y Dinámica Ecológica</span>
+                <span style="font-size: 0.85rem; font-weight: bold; color: var(--text-sub);" id="chartTitle">Evolución Temporal (Mes a Mes)</span>
                 <span id="diversityIndex" style="font-size: 0.8rem; font-weight: bold; color: #38bdf8;">Índice Shannon-Wiener (H'): 0.00</span>
             </div>
             <div class="chart-container">
@@ -346,6 +360,9 @@
     const ROWS = 50;
     const TOTAL_CELLS = COLS * ROWS;
 
+    let totalTargetYears = 1; 
+    let totalTargetMonths = 12;
+
     let grid = new Array(TOTAL_CELLS).fill(0);
     let nextGrid = new Array(TOTAL_CELLS).fill(0);
 
@@ -359,7 +376,7 @@
     let isRunning = false;
     let timer = null;
     let speedMs = 80;
-    let stepCount = 0;
+    let stepCount = 0; 
     let currentSystem = 'monocultura';
 
     let moisture = 0.70;
@@ -393,7 +410,12 @@
             maintainAspectRatio: false,
             animation: false,
             scales: {
-                x: { display: true, ticks: { color: '#64748b' }, grid: { color: '#334155' } },
+                x: { 
+                    display: true, 
+                    title: { display: true, text: 'Línea de Tiempo', color: '#94a3b8' },
+                    ticks: { color: '#64748b' }, 
+                    grid: { color: '#334155' } 
+                },
                 y: { min: 0, max: 100, ticks: { color: '#64748b' }, grid: { color: '#334155' } }
             },
             plugins: {
@@ -445,12 +467,9 @@
         });
         document.getElementById('diversityIndex').innerText = `Índice Shannon-Wiener (H'): ${h.toFixed(2)}`;
 
-        if (chartData.labels.length > 80) {
-            chartData.labels.shift();
-            chartData.datasets.forEach(ds => ds.data.shift());
-        }
+        let labelText = totalTargetYears === 1 ? `Mes ${stepCount}` : `Año ${(stepCount / 12).toFixed(1)}`;
 
-        chartData.labels.push(stepCount);
+        chartData.labels.push(labelText);
         chartData.datasets[0].data.push(pBare.toFixed(1));
         chartData.datasets[1].data.push(pCrop.toFixed(1));
         chartData.datasets[2].data.push(pWeed.toFixed(1));
@@ -460,26 +479,37 @@
     }
 
     function stepSimulation() {
+        if (stepCount >= totalTargetMonths) {
+            pause();
+            return;
+        }
+
         stepCount++;
-        document.getElementById('stepCounter').innerText = `Tiempo: ${stepCount} ciclos`;
+        
+        const currentYear = Math.floor((stepCount - 1) / 12);
+        const currentMonth = ((stepCount - 1) % 12) + 1;
+
+        document.getElementById('yearCounter').innerText = `Año ${currentYear} / ${totalTargetYears}`;
+        document.getElementById('subTimeCounter').innerText = `Mes ${currentMonth} (Ciclo ${stepCount} de ${totalTargetMonths})`;
 
         const badge = document.getElementById('statusBadge');
-        if (activeRegime !== 'standard') {
-            badge.innerText = `Régimen: ${document.getElementById('activeRegimeLabel').innerText.replace('Régimen: ', '')}`;
+        if (activeRegime !== 'standard' || gradientEnabled) {
+            let statusText = document.getElementById('activeRegimeLabel').innerText.replace('Régimen: ', '');
+            if (gradientEnabled) statusText += ' + Gradiente';
+            badge.innerText = statusText;
             badge.classList.add('active');
         } else {
             badge.classList.remove('active');
         }
 
         for (let r = 0; r < ROWS; r++) {
-            // Factor Ambiental: Si el gradiente está activo se calcula por fila, si no usa la humedad global del slider
+            // Aplicación del gradiente de ladera si está activo (seco arriba, húmedo abajo)
             const currentMoisture = gradientEnabled ? Math.min(1.0, Math.max(0.1, 0.10 + (r / ROWS) * 0.85)) : moisture;
 
             for (let c = 0; c < COLS; c++) {
                 const idx = r * COLS + c;
                 const current = grid[idx];
 
-                // Conteo de vecinos (vecindario de Moore)
                 let nCrop = 0, nWeed = 0, nWoody = 0;
                 for (let dr = -1; dr <= 1; dr++) {
                     for (let dc = -1; dc <= 1; dc++) {
@@ -495,14 +525,11 @@
 
                 let nextVal = current;
 
-                // --- REGLAS VINCULADAS DIRECTAMENTE A AMBIENTE Y PASTOREO EN TIEMPO REAL ---
                 if (current === 0) { // Suelo Desnudo
-                    // Crecimiento acoplado a la multiplicación de Humedad x Nutrientes
                     let pCrop = (nCrop > 0) ? (nCrop / 8) * currentMoisture * nutrients * 0.60 : 0.005;
                     let pWeed = (nWeed > 0) ? (nWeed / 8) * 0.40 + (0.05 * (1 - nutrients)) : 0.02;
                     let pWoody = (nWoody > 0) ? (nWoody / 8) * currentMoisture * 0.15 : 0.002;
 
-                    // Modificadores según régimen de manejo activo
                     if (activeRegime === 'overgrazing') {
                         pCrop *= 0.05; 
                         pWeed *= 2.0; 
@@ -518,18 +545,16 @@
                     else if (rand < pCrop + pWeed + pWoody) nextVal = 3;
 
                 } else if (current === 1) { // Cultivo / Pasto
-                    // Pérdida vinculada DIRECTAMENTE al slider de Pastoreo (grazing) y sequía
                     let droughtEffect = (1 - currentMoisture) * 0.25;
                     let lossProb = (grazing * 0.50) + droughtEffect; 
                     let weedInvasion = (nWeed / 8) * 0.30;
 
                     if (activeRegime === 'overgrazing') lossProb += 0.40;
 
-                    if (Math.random() < lossProb) nextVal = 0; // Pasa a suelo desnudo por sobrepastoreo o sequía
+                    if (Math.random() < lossProb) nextVal = 0;
                     else if (Math.random() < weedInvasion) nextVal = 2;
 
                 } else if (current === 2) { // Maleza
-                    // Recuperación del cultivo si suben los nutrientes y la humedad
                     let replaceByCrop = (nCrop / 8) * nutrients * currentMoisture * 0.30;
                     let grazingDamage = grazing * 0.10;
                     
@@ -537,7 +562,6 @@
                     else if (Math.random() < grazingDamage && activeRegime === 'mbgi') nextVal = 0;
 
                 } else if (current === 3) { // Monte / Leñosa
-                    // Sensible a sequías severas o presión extrema
                     let dieback = (1 - currentMoisture) * 0.05 + (grazing > 0.8 ? 0.03 : 0.0);
                     if (Math.random() < dieback) nextVal = 0;
                 }
@@ -548,7 +572,11 @@
 
         grid = [...nextGrid];
         render();
-        updateMetrics(); // Sincroniza tarjetas y gráfico en cada tick
+        updateMetrics();
+
+        if (stepCount >= totalTargetMonths) {
+            pause();
+        }
     }
 
     function setRegime(regime, labelText) {
@@ -558,7 +586,22 @@
         updateMetrics();
     }
 
-    // APLICA PROPORCIONES OBJETIVO SEGÚN EL MANEJO SELECCIONADO Y ACTUALIZA PORCENTAJES
+    function toggleGradient() {
+        gradientEnabled = !gradientEnabled;
+        const btn = document.getElementById('btnToggleGradient');
+        if (gradientEnabled) {
+            btn.classList.add('btn-action-highlight');
+            btn.classList.remove('btn-action');
+            btn.innerText = '⛰️ Gradiente Topográfico: ACTIVO';
+        } else {
+            btn.classList.remove('btn-action-highlight');
+            btn.classList.add('btn-action');
+            btn.innerText = '⛰️ Activar Gradiente Topográfico';
+        }
+        render();
+        updateMetrics();
+    }
+
     function applyManagementDistribution(pCrop, pWeed, pWoody) {
         for (let i = 0; i < TOTAL_CELLS; i++) {
             let rand = Math.random();
@@ -571,10 +614,16 @@
         updateMetrics();
     }
 
-    // CONTROLES DE MANEJO VINCULADOS A PORCENTAJES DINÁMICOS
     function renderManagementControls() {
         const container = document.getElementById('dynamicManagementControls');
         container.innerHTML = '';
+
+        // Botón común para conmutar el Gradiente Topográfico
+        const gradBtn = document.createElement('button');
+        gradBtn.id = 'btnToggleGradient';
+        gradBtn.className = gradientEnabled ? 'btn-action-highlight' : 'btn-action';
+        gradBtn.innerText = gradientEnabled ? '⛰️ Gradiente Topográfico: ACTIVO' : '⛰️ Activar Gradiente Topográfico';
+        gradBtn.onclick = toggleGradient;
 
         if (currentSystem === 'monocultura') {
             container.innerHTML = `
@@ -582,6 +631,8 @@
                 <button id="btnDirectSeeding" class="btn-action-highlight">🌱 Siembra Directa (Rastrojo)</button>
                 <button id="btnServiceCrop" class="btn-action">🌾 Cultivo de Servicios</button>
             `;
+            container.appendChild(gradBtn);
+
             document.getElementById('btnConvTillage').onclick = () => {
                 setRegime('standard', 'Labranza Convencional');
                 applyManagementDistribution(0.40, 0.10, 0.0);
@@ -601,6 +652,8 @@
                 <button id="btnMulch" class="btn-action-highlight">✂️ Manejo Biomasa / Macheteo</button>
                 <button id="btnFire" class="btn-action-danger">🔥 Quema / Incendio Prescripto</button>
             `;
+            container.appendChild(gradBtn);
+
             document.getElementById('btnHarvest').onclick = () => {
                 setRegime('standard', 'Cosecha Realizada');
                 applyManagementDistribution(0.10, 0.30, 0.20);
@@ -614,12 +667,14 @@
                 applyManagementDistribution(0.05, 0.10, 0.05);
             };
 
-        } else if (currentSystem === 'silvopastoril' || currentSystem === 'gradient') {
+        } else if (currentSystem === 'silvopastoril') {
             container.innerHTML = `
                 <button id="btnOvergraze" class="btn-action-danger">⚠️ Sobrepastoreo Severo</button>
                 <button id="btnMBGI" class="btn-action-highlight">🌳 Manejo MBGI (Sostenible)</button>
                 <button id="btnPruning" class="btn-action">🪓 Raleo / Poda Arbórea</button>
             `;
+            container.appendChild(gradBtn);
+
             document.getElementById('btnOvergraze').onclick = () => {
                 grazing = 0.90;
                 document.getElementById('sliderGrazing').value = 90;
@@ -645,10 +700,24 @@
         pause();
         currentSystem = systemType;
         stepCount = 0;
+        gradientEnabled = false;
         setRegime('standard', 'Sin Intervención / Normal');
 
         document.getElementById('statusBadge').classList.remove('active');
-        document.getElementById('stepCounter').innerText = `Tiempo: 0 ciclos`;
+
+        // Escala temporal adaptativa
+        if (systemType === 'monocultura' || systemType === 'policultivo') {
+            totalTargetYears = 1;
+            totalTargetMonths = 12;
+            document.getElementById('chartTitle').innerText = 'Evolución Temporal en 1 Año (Ciclo Agrícola)';
+        } else {
+            totalTargetYears = 20;
+            totalTargetMonths = 240;
+            document.getElementById('chartTitle').innerText = 'Evolución Temporal en 20 Años (Escala Forestal)';
+        }
+
+        document.getElementById('yearCounter').innerText = `Año 0 / ${totalTargetYears}`;
+        document.getElementById('subTimeCounter').innerText = `Mes 0 (Ciclo 0 de ${totalTargetMonths})`;
         grid.fill(0);
 
         document.querySelectorAll('.btn-preset').forEach(b => b.classList.remove('active'));
@@ -656,25 +725,19 @@
 
         if (systemType === 'monocultura') {
             document.getElementById('btnPresetMonocultura').classList.add('active');
-            descElem.innerHTML = '<strong>Monocultivo Comercial:</strong> Siembra de un único cultivo (E1). Sensible a invasión por malezas (E2).';
+            descElem.innerHTML = '<strong>Monocultivo Comercial (1 Año):</strong> Ciclo agrícola anual de cultivo principal (E1) con riesgo de invasión de malezas (E2).';
             moisture = 0.70; nutrients = 0.80; grazing = 0.0;
             applyManagementDistribution(0.35, 0.03, 0.0);
         } else if (systemType === 'policultivo') {
             document.getElementById('btnPresetPolicultivo').classList.add('active');
-            descElem.innerHTML = '<strong>Policultivo Agroecológico:</strong> Coexistencia de cultivo (E1), especies acompañantes (E2) y estrato arbóreo (E3).';
+            descElem.innerHTML = '<strong>Policultivo Agroecológico (1 Año):</strong> Coexistencia estacional entre cultivos (E1) y especies acompañantes (E2).';
             moisture = 0.65; nutrients = 0.70; grazing = 0.10;
             applyManagementDistribution(0.25, 0.20, 0.07);
         } else if (systemType === 'silvopastoril') {
             document.getElementById('btnPresetSilvopastoril').classList.add('active');
-            descElem.innerHTML = '<strong>Pastoreo bajo Monte (MBGI):</strong> Conservación del estrato leñoso nativo (E3) con pasturas (E1) bajo pastoreo planificado.';
+            descElem.innerHTML = '<strong>Pastoreo bajo Monte - MBGI (20 Años):</strong> Dinámica a largo plazo del estrato arbóreo leñoso (E3) e interacción con pasturas (E1).';
             moisture = 0.55; nutrients = 0.65; grazing = 0.25;
             applyManagementDistribution(0.35, 0.0, 0.30);
-        } else if (systemType === 'gradient') {
-            document.getElementById('btnPresetGradient').classList.add('active');
-            descElem.innerHTML = '<strong>Gradiente Topográfico:</strong> Variación de humedad en ladera (Seco superior → Húmedo inferior).';
-            gradientEnabled = true;
-            document.getElementById('chkGradient').checked = true;
-            applyManagementDistribution(0.25, 0.0, 0.0);
         }
 
         document.getElementById('sliderMoisture').value = moisture * 100;
@@ -697,7 +760,7 @@
     }
 
     function play() {
-        if (!isRunning) {
+        if (!isRunning && stepCount < totalTargetMonths) {
             isRunning = true;
             timer = setInterval(stepSimulation, speedMs);
         }
@@ -708,11 +771,9 @@
         clearInterval(timer);
     }
 
-    // EVENT LISTENERS DE CONTROLES Y SLIDERS
     document.getElementById('btnPresetMonocultura').onclick = () => loadSystem('monocultura');
     document.getElementById('btnPresetPolicultivo').onclick = () => loadSystem('policultivo');
     document.getElementById('btnPresetSilvopastoril').onclick = () => loadSystem('silvopastoril');
-    document.getElementById('btnPresetGradient').onclick = () => loadSystem('gradient');
 
     document.getElementById('btnPlay').onclick = play;
     document.getElementById('btnPause').onclick = pause;
@@ -739,10 +800,6 @@
         document.getElementById('valGrazing').innerText = e.target.value + '%';
     };
 
-    document.getElementById('chkGradient').onchange = (e) => {
-        gradientEnabled = e.target.checked;
-    };
-
     canvas.onclick = (e) => {
         const rect = canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -756,7 +813,6 @@
         updateMetrics();
     };
 
-    // Carga inicial al abrir la página
     loadSystem('monocultura');
 </script>
 </body>
