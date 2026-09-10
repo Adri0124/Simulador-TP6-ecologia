@@ -3,714 +3,616 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador de Ecología Agrícola - Comparador de Sistemas Productivos</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <!-- Chart.js CDN -->
+    <title>Simulador de Agrosistemas</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        canvas#spatialCanvas {
+        :root {
+            --bg-color: #f4f6f8;
+            --panel-bg: #ffffff;
+            --text-color: #333333;
+            --border-color: #e0e0e0;
+            --primary-color: #2e7d32;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 20px;
+        }
+
+        .main-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background-color: var(--panel-bg);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border: 1fr solid var(--border-color);
+        }
+
+        .canvas-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #1a1a1a;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        canvas#gridCanvas {
+            cursor: pointer;
             image-rendering: pixelated;
-            background-color: #1e293b;
         }
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #f1f5f9;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
+
+        .status-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            padding: 6px 12px;
             border-radius: 4px;
+            font-size: 0.85rem;
+            display: none;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-badge.active {
+            display: flex;
+            border-left: 4px solid #ff9800;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .metric-box {
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+
+        .m-bare { background-color: #e0d0b0; color: #5c4018; }
+        .m-crop { background-color: #a8e6cf; color: #1b5e20; }
+        .m-weed { background-color: #ffd3b6; color: #e65100; }
+        .m-woody { background-color: #d4a5a5; color: #4a1414; }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+
+        .slider-val {
+            float: right;
+            font-weight: normal;
+            color: #666;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        .btn-group {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            background-color: #e0e0e0;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        button:hover { background-color: #d0d0d0; }
+        button.btn-primary { background-color: var(--primary-color); color: white; }
+        button.btn-primary:hover { background-color: #1b5e20; }
+        button.btn-warning { background-color: #ff9800; color: white; }
+        button.btn-danger { background-color: #f44336; color: white; }
+
+        .chart-container {
+            position: relative;
+            height: 220px;
+            width: 100%;
+        }
+
+        #diversityIndex {
+            font-size: 0.95rem;
+            font-weight: bold;
+            margin-top: 10px;
+            text-align: right;
+            color: #444;
         }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col">
+<body>
 
-    <!-- Header Navigation -->
-    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4 flex flex-wrap justify-between items-center shadow-lg">
-        <div class="flex items-center space-x-3">
-            <div class="bg-emerald-600 text-white p-2.5 rounded-lg text-xl shadow-inner">
-                <i class="fa-solid fa-leaf"></i>
+<div class="container">
+    <!-- PANEL PRINCIPAL (Simulación y Gráficos) -->
+    <div class="main-panel">
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h2 style="margin: 0; font-size: 1.2rem;">Lienzo de Ecología del Agrosistema</h2>
+                <span id="stepCounter" style="font-weight: bold; color: #666;">Tiempo: 0 ciclos</span>
             </div>
-            <div>
-                <h1 class="text-xl font-bold text-white tracking-wide">Simulador de Sistemas Productivos Agroecológicos</h1>
-                <p class="text-xs text-emerald-400 font-medium">Comparativa: Monocultivo | Policultivo | Pastoreo bajo Monte</p>
+
+            <div class="canvas-container">
+                <canvas id="gridCanvas" width="500" height="300"></canvas>
+                <div id="statusBadge" class="status-badge">
+                    <span>🚜 Control de Labranza Activo (Efecto residual)</span>
+                </div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-box m-bare">Desnudo: <span id="metricBare">0%</span></div>
+                <div class="metric-box m-crop">Cultivo: <span id="metricCrop">0%</span></div>
+                <div class="metric-box m-weed">Maleza: <span id="metricWeed">0%</span></div>
+                <div class="metric-box m-woody">Leñosa: <span id="metricWoody">0%</span></div>
             </div>
         </div>
-        
-        <!-- Main Comparison Selector Buttons -->
-        <div class="flex items-center space-x-2 mt-3 lg:mt-0 flex-wrap gap-1">
-            <button id="btnPresetMonocultura" class="preset-btn bg-emerald-700 hover:bg-emerald-600 text-xs font-semibold px-3 py-2 rounded text-white border border-emerald-500 shadow transition flex items-center">
-                <i class="fa-solid fa-wheat-awn mr-1.5 text-amber-300"></i> 1. Monocultivo
-            </button>
-            <button id="btnPresetPolicultivo" class="preset-btn bg-slate-700 hover:bg-slate-600 text-xs font-semibold px-3 py-2 rounded text-slate-200 border border-slate-600 transition flex items-center">
-                <i class="fa-solid fa-seedling mr-1.5 text-emerald-400"></i> 2. Policultivo
-            </button>
-            <button id="btnPresetSilvopastoril" class="preset-btn bg-slate-700 hover:bg-slate-600 text-xs font-semibold px-3 py-2 rounded text-slate-200 border border-slate-600 transition flex items-center">
-                <i class="fa-solid fa-cow mr-1.5 text-sky-400"></i> 3. Pastoreo bajo Monte
-            </button>
-            <button id="btnPresetGradient" class="preset-btn bg-slate-700 hover:bg-slate-600 text-xs font-semibold px-3 py-2 rounded text-slate-200 border border-slate-600 transition flex items-center">
-                <i class="fa-solid fa-mountain-sun mr-1.5 text-blue-400"></i> Gradiente Topográfico
-            </button>
+
+        <div class="card">
+            <h3 style="margin-top: 0; font-size: 1rem;">Dinámica Temporal de Cobertura</h3>
+            <div class="chart-container">
+                <canvas id="timeChart"></canvas>
+            </div>
+            <div id="diversityIndex">Índice Shannon-Wiener (H'): 0.00</div>
         </div>
-    </header>
+    </div>
 
-    <!-- Main Container -->
-    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 lg:p-6 max-w-[1700px] w-full mx-auto">
+    <!-- PANEL DE CONTROL (Presets y Parámetros) -->
+    <div class="card">
+        <h3 style="margin-top: 0; font-size: 1.1rem;">Sistemas Preestablecidos</h3>
+        <div class="btn-group" style="grid-template-columns: 1fr; margin-bottom: 15px;">
+            <button id="btnPresetMonocultura" class="btn-primary">Monocultivo Intensivo</button>
+            <button id="btnPresetPolicultivo">Policultivo / Agroecológico</button>
+            <button id="btnPresetSilvopastoril">Sistema Silvopastoril</button>
+            <button id="btnPresetGradient">Gradiente de Humedad</button>
+        </div>
+
+        <h3 style="font-size: 1rem;">Controles de Ejecución</h3>
+        <div class="btn-group">
+            <button id="btnPlay" class="btn-primary">▶ Iniciar</button>
+            <button id="btnPause">⏸ Pausa</button>
+            <button id="btnStep">⏭ Paso</button>
+            <button id="btnReset">🔄 Reiniciar</button>
+        </div>
+
+        <hr style="margin: 15px 0; border: 0; border-top: 1px solid var(--border-color);">
+
+        <h3 style="font-size: 1rem;">Variables Ambientales</h3>
         
-        <!-- Sidebar Controls (Left - 4 Cols) -->
-        <section class="lg:col-span-4 bg-slate-800 border border-slate-700 rounded-xl p-5 flex flex-col space-y-5 shadow-xl custom-scrollbar overflow-y-auto max-h-[86vh]">
-            
-            <!-- System Mode Indicator Banner -->
-            <div id="systemBanner" class="p-3 bg-amber-950/60 border border-amber-600/60 rounded-lg text-xs text-amber-200 flex items-start space-x-2">
-                <i class="fa-solid fa-circle-info text-amber-400 text-base mt-0.5"></i>
-                <div>
-                    <strong id="bannerTitle" class="block font-bold text-amber-300">Sistema Seleccionado: Monocultivo</strong>
-                    <span id="bannerDesc" class="text-[11px] text-amber-100/90 leading-tight block mt-0.5">Siembra en hileras de una sola especie productiva. Sensible al ingreso de malezas invasoras si disminuyen nutrientes o agua.</span>
-                </div>
-            </div>
+        <div class="control-group">
+            <label>Velocidad Simulación</label>
+            <input type="range" id="speedSlider" min="1" max="50" value="25">
+        </div>
 
-            <!-- Playback Controls -->
-            <div class="bg-slate-900/80 p-4 rounded-lg border border-slate-700/60">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Control de Tiempo</span>
-                    <span id="stepCounter" class="text-xs font-mono bg-slate-800 text-emerald-400 px-2 py-0.5 rounded border border-slate-700">Tiempo: 0 ciclos</span>
-                </div>
-                <div class="grid grid-cols-4 gap-2">
-                    <button id="btnPlay" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs py-2 rounded shadow transition flex items-center justify-center space-x-1">
-                        <i class="fa-solid fa-play"></i> <span>Iniciar</span>
-                    </button>
-                    <button id="btnPause" class="bg-amber-600 hover:bg-amber-500 text-white font-medium text-xs py-2 rounded shadow transition flex items-center justify-center space-x-1">
-                        <i class="fa-solid fa-pause"></i> <span>Pausa</span>
-                    </button>
-                    <button id="btnStep" class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-xs py-2 rounded border border-slate-600 transition flex items-center justify-center space-x-1">
-                        <i class="fa-solid fa-forward-step"></i> <span>Paso</span>
-                    </button>
-                    <button id="btnReset" class="bg-red-700 hover:bg-red-600 text-white font-medium text-xs py-2 rounded shadow transition flex items-center justify-center space-x-1">
-                        <i class="fa-solid fa-rotate-left"></i> <span>Reiniciar</span>
-                    </button>
-                </div>
-                <!-- Speed Slider -->
-                <div class="mt-3 flex items-center space-x-3">
-                    <span class="text-xs text-slate-400">Velocidad:</span>
-                    <input type="range" id="speedSlider" min="1" max="60" value="25" class="w-full accent-emerald-500 bg-slate-700 h-1.5 rounded cursor-pointer">
-                </div>
-            </div>
+        <div class="control-group">
+            <label>Humedad General <span id="valMoisture" class="slider-val">50%</span></label>
+            <input type="range" id="sliderMoisture" min="0" max="100" value="50">
+        </div>
 
-            <!-- Environmental Factors -->
-            <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700/50 space-y-4">
-                <h3 class="text-sm font-semibold text-emerald-400 flex items-center space-x-2">
-                    <i class="fa-solid fa-cloud-sun-rain"></i>
-                    <span>Factores Ambientales de Entrada</span>
-                </h3>
+        <div class="control-group">
+            <label>Nutrientes del Suelo <span id="valNutrients" class="slider-val">60%</span></label>
+            <input type="range" id="sliderNutrients" min="0" max="100" value="60">
+        </div>
 
-                <!-- Water Availability / Moisture -->
-                <div>
-                    <div class="flex justify-between text-xs mb-1">
-                        <span class="text-slate-300">Precipitación / Humedad Suelo</span>
-                        <span id="valMoisture" class="font-mono text-emerald-400">70%</span>
-                    </div>
-                    <input type="range" id="sliderMoisture" min="10" max="100" value="70" class="w-full accent-emerald-500 bg-slate-700 h-1.5 rounded cursor-pointer">
-                </div>
+        <div class="control-group">
+            <label>Presión de Pastoreo <span id="valGrazing" class="slider-val">10%</span></label>
+            <input type="range" id="sliderGrazing" min="0" max="100" value="10">
+        </div>
 
-                <!-- Soil Fertility / Nutrients -->
-                <div>
-                    <div class="flex justify-between text-xs mb-1">
-                        <span class="text-slate-300">Nutrientes del Suelo</span>
-                        <span id="valNutrients" class="font-mono text-emerald-400">75%</span>
-                    </div>
-                    <input type="range" id="sliderNutrients" min="10" max="100" value="75" class="w-full accent-emerald-500 bg-slate-700 h-1.5 rounded cursor-pointer">
-                </div>
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="chkGradient"> Activar Gradiente de Humedad
+            </label>
+            <span id="gradientIndicator" style="display:none; font-size: 0.75rem; color: #666;">(Norte Seco → Sur Húmedo)</span>
+        </div>
 
-                <!-- Topographic Gradient Toggle -->
-                <div class="flex items-center justify-between pt-1 border-t border-slate-800">
-                    <div class="flex items-center space-x-2">
-                        <input type="checkbox" id="chkGradient" class="w-4 h-4 accent-emerald-500 rounded border-slate-700 cursor-pointer">
-                        <label for="chkGradient" class="text-xs text-slate-300 cursor-pointer">Activar Gradiente Topográfico (Pendiente seca/húmeda)</label>
-                    </div>
-                </div>
-            </div>
+        <hr style="margin: 15px 0; border: 0; border-top: 1px solid var(--border-color);">
 
-            <!-- Disturbance Regime -->
-            <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700/50 space-y-4">
-                <h3 class="text-sm font-semibold text-amber-400 flex items-center space-x-2">
-                    <i class="fa-solid fa-scissors"></i>
-                    <span>Manejo y Disturbios Agronómicos</span>
-                </h3>
+        <h3 style="font-size: 1rem;">Perturbaciones / Manejo</h3>
+        <div class="btn-group" style="grid-template-columns: 1fr;">
+            <button id="btnDisturbTillage" class="btn-warning">🚜 Aplicar Labranza / Control</button>
+            <button id="btnDisturbFire" class="btn-danger">🔥 Evento de Incendio</button>
+        </div>
+    </div>
+</div>
 
-                <!-- Grazing Pressure -->
-                <div>
-                    <div class="flex justify-between text-xs mb-1">
-                        <span class="text-slate-300">Presión de Pastoreo / Carga Animal</span>
-                        <span id="valGrazing" class="font-mono text-amber-400">0%</span>
-                    </div>
-                    <input type="range" id="sliderGrazing" min="0" max="80" value="0" class="w-full accent-amber-500 bg-slate-700 h-1.5 rounded cursor-pointer">
-                    <p class="text-[11px] text-slate-400 mt-0.5">Afecta con prioridad a especies forrajeras/cultivos ($E_1$) respecto a leñosas ($E_3$).</p>
-                </div>
+<script>
+    // Configuración Inicial de la Grilla
+    const ROWS = 40;
+    const COLS = 60;
+    let grid = new Array(ROWS * COLS).fill(0);
+    let nextGrid = new Array(ROWS * COLS).fill(0);
 
-                <!-- Manual Disturbance Buttons -->
-                <div class="grid grid-cols-2 gap-2 pt-1">
-                    <button id="btnDisturbTillage" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs py-1.5 px-2 rounded border border-slate-600 flex items-center justify-center space-x-1 transition">
-                        <i class="fa-solid fa-tractor text-amber-400"></i>
-                        <span>Labranza / Control</span>
-                    </button>
-                    <button id="btnDisturbFire" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs py-1.5 px-2 rounded border border-slate-600 flex items-center justify-center space-x-1 transition">
-                        <i class="fa-solid fa-fire text-red-400"></i>
-                        <span>Incendio / Queima</span>
-                    </button>
-                </div>
-            </div>
+    // Paleta de Colores
+    const COLOR_MAP = {
+        0: '#e0d0b0', // Suelo Desnudo
+        1: '#2e7d32', // Cultivo / Pasto
+        2: '#fbc02d', // Maleza / Acompañante
+        3: '#4e342e'  // Leñosa / Monte
+    };
 
-            <!-- Functional Types Legend -->
-            <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700/50 space-y-3">
-                <h3 class="text-sm font-semibold text-sky-400 flex items-center space-x-2">
-                    <i class="fa-solid fa-seedling"></i>
-                    <span>Componentes de la Comunidad ($E_i$)</span>
-                </h3>
+    // Estado del Simulador
+    let isRunning = false;
+    let timer = null;
+    let speedMs = 100;
+    let stepCount = 0;
+    let currentSystem = 'monocultura';
 
-                <div class="space-y-2 text-xs">
-                    <div class="p-2 bg-slate-800/80 rounded border-l-4 border-emerald-500 flex justify-between items-center">
-                        <div>
-                            <span class="font-bold text-slate-200 block">Cultivo / Pasto Principal (E1)</span>
-                            <span class="text-[11px] text-slate-400">Especie productiva de alto rendimiento.</span>
-                        </div>
-                        <span class="text-xs bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded font-mono border border-emerald-800">Verde</span>
-                    </div>
+    // Variables de Manejo
+    let moisture = 0.50;
+    let nutrients = 0.60;
+    let grazing = 0.10;
+    let gradientEnabled = false;
 
-                    <div class="p-2 bg-slate-800/80 rounded border-l-4 border-amber-500 flex justify-between items-center">
-                        <div>
-                            <span class="font-bold text-slate-200 block">Maleza / Especie Acompañante (E2)</span>
-                            <span class="text-[11px] text-slate-400">Invasora ruderal / Leguminosa adaptada.</span>
-                        </div>
-                        <span class="text-xs bg-amber-950 text-amber-300 px-2 py-0.5 rounded font-mono border border-amber-800">Amarillo</span>
-                    </div>
+    // EFECTO RESIDUAL DE LABRANZA
+    let tillageEffectTimer = 0;
 
-                    <div class="p-2 bg-slate-800/80 rounded border-l-4 border-sky-500 flex justify-between items-center">
-                        <div>
-                            <span class="font-bold text-slate-200 block">Leñosa / Monte NATIVO (E3)</span>
-                            <span class="text-[11px] text-slate-400">Dosel arbóreo/arbustivo (sombreo).</span>
-                        </div>
-                        <span class="text-xs bg-sky-950 text-sky-300 px-2 py-0.5 rounded font-mono border border-sky-800">Azul</span>
-                    </div>
-                </div>
-            </div>
+    // Configuración Canvas
+    const canvas = document.getElementById('gridCanvas');
+    const ctx = canvas.getContext('2d');
+    const cellW = canvas.width / COLS;
+    const cellH = canvas.height / ROWS;
 
-        </section>
+    // Configuración de Chart.js
+    const chartCtx = document.getElementById('timeChart').getContext('2d');
+    const chartData = {
+        labels: [],
+        datasets: [
+            { label: 'Suelo Desnudo', borderColor: '#b08d57', data: [], fill: false, tension: 0.1, pointRadius: 0 },
+            { label: 'Cultivo', borderColor: '#2e7d32', data: [], fill: false, tension: 0.1, pointRadius: 0 },
+            { label: 'Maleza', borderColor: '#fbc02d', data: [], fill: false, tension: 0.1, pointRadius: 0 },
+            { label: 'Leñosa', borderColor: '#4e342e', data: [], fill: false, tension: 0.1, pointRadius: 0 }
+        ]
+    };
 
-        <!-- Central Spatial Canvas & Analytics (Right - 8 Cols) -->
-        <section class="lg:col-span-8 flex flex-col space-y-5">
-            
-            <!-- Real-Time Metrics Row -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-3 text-center shadow">
-                    <span class="text-[11px] font-medium text-slate-400 block uppercase">Suelo Desnudo</span>
-                    <span id="metricBare" class="text-xl font-bold font-mono text-slate-300">0%</span>
-                </div>
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-3 text-center shadow">
-                    <span class="text-[11px] font-medium text-slate-400 block uppercase">Cultivo / Pasto (E1)</span>
-                    <span id="metricCrop" class="text-xl font-bold font-mono text-emerald-400">0%</span>
-                </div>
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-3 text-center shadow">
-                    <span class="text-[11px] font-medium text-slate-400 block uppercase">Malezas / Acompañante (E2)</span>
-                    <span id="metricWeed" class="text-xl font-bold font-mono text-amber-400">0%</span>
-                </div>
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-3 text-center shadow">
-                    <span class="text-[11px] font-medium text-slate-400 block uppercase">Monte / Leñosas (E3)</span>
-                    <span id="metricWoody" class="text-xl font-bold font-mono text-sky-400">0%</span>
-                </div>
-            </div>
+    const timeChart = new Chart(chartCtx, {
+        type: 'line',
+        data: chartData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            scales: {
+                x: { display: true, title: { display: false } },
+                y: { min: 0, max: 100, title: { display: true, text: '% Cobertura' } }
+            },
+            plugins: {
+                legend: { position: 'top', labels: { boxWidth: 12 } }
+            }
+        }
+    });
 
-            <!-- Spatial Simulation View (Canvas) -->
-            <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-xl flex flex-col space-y-3">
-                <div class="flex justify-between items-center flex-wrap gap-2">
-                    <h2 class="text-sm font-semibold text-slate-200 flex items-center space-x-2">
-                        <i class="fa-solid fa-border-all text-emerald-400"></i>
-                        <span>Mapa Espacial de Cobertura ($100 \times 50$ celdas)</span>
-                    </h2>
-                    <div class="flex items-center space-x-4 text-xs text-slate-300 flex-wrap gap-2">
-                        <span class="flex items-center space-x-1">
-                            <span class="w-3 h-3 rounded-full bg-slate-600 inline-block border border-slate-400"></span>
-                            <span>Suelo libre</span>
-                        </span>
-                        <span class="flex items-center space-x-1">
-                            <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>
-                            <span>E1: Cultivo/Pasto</span>
-                        </span>
-                        <span class="flex items-center space-x-1">
-                            <span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>
-                            <span>E2: Maleza/Acompañante</span>
-                        </span>
-                        <span class="flex items-center space-x-1">
-                            <span class="w-3 h-3 rounded-full bg-sky-500 inline-block"></span>
-                            <span>E3: Monte/Leñosa</span>
-                        </span>
-                    </div>
-                </div>
+    function render() {
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                ctx.fillStyle = COLOR_MAP[grid[r * COLS + c]];
+                ctx.fillRect(c * cellW, r * cellH, cellW, cellH);
+            }
+        }
+    }
 
-                <!-- Canvas Wrapper -->
-                <div class="relative w-full aspect-[2/1] bg-slate-950 rounded-lg overflow-hidden border border-slate-700/80 flex items-center justify-center">
-                    <canvas id="spatialCanvas" class="w-full h-full object-contain cursor-crosshair"></canvas>
-                    <div id="gradientIndicator" class="hidden absolute right-2 top-2 bottom-2 w-4 bg-gradient-to-b from-amber-700/60 via-emerald-700/60 to-blue-700/60 rounded border border-white/20 flex flex-col justify-between text-[9px] text-white font-bold py-1 px-0.5 text-center pointer-events-none">
-                        <span>Xérico</span>
-                        <span>Hídrico</span>
-                    </div>
-                </div>
-                <p class="text-[11px] text-slate-400 text-center">Haz clic en cualquier celda para sembrar o remover vegetación dinámicamente.</p>
-            </div>
+    function loadSystem(systemType) {
+        pause();
+        currentSystem = systemType;
+        stepCount = 0;
+        tillageEffectTimer = 0;
+        document.getElementById('statusBadge').classList.remove('active');
+        document.getElementById('stepCounter').innerText = `Tiempo: 0 ciclos`;
+        grid.fill(0);
 
-            <!-- Dynamic Population Chart -->
-            <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-xl flex flex-col space-y-2">
-                <div class="flex justify-between items-center flex-wrap gap-2">
-                    <h2 class="text-sm font-semibold text-slate-200 flex items-center space-x-2">
-                        <i class="fa-solid fa-chart-line text-emerald-400"></i>
-                        <span>Evolución Temporal de Cobertura y Estabilidad</span>
-                    </h2>
-                    <span id="diversityIndex" class="text-xs bg-slate-700 text-emerald-300 font-mono px-2.5 py-1 rounded border border-slate-600 font-bold">
-                        Índice Shannon-Wiener (H'): 0.00
-                    </span>
-                </div>
-                <div class="relative w-full h-52 bg-slate-900/60 rounded-lg p-2 border border-slate-700/50">
-                    <canvas id="timeSeriesChart"></canvas>
-                </div>
-            </div>
+        if (systemType === 'monocultura') {
+            moisture = 0.5; nutrients = 0.8; grazing = 0.05; gradientEnabled = false;
+            for (let i = 0; i < grid.length; i++) {
+                let rand = Math.random();
+                if (rand < 0.70) grid[i] = 1;
+                else if (rand < 0.85) grid[i] = 2;
+            }
+        } else if (systemType === 'policultivo') {
+            moisture = 0.6; nutrients = 0.7; grazing = 0.15; gradientEnabled = false;
+            for (let i = 0; i < grid.length; i++) {
+                let rand = Math.random();
+                if (rand < 0.45) grid[i] = 1;
+                else if (rand < 0.75) grid[i] = 2;
+                else if (rand < 0.85) grid[i] = 3;
+            }
+        } else if (systemType === 'silvopastoril') {
+            moisture = 0.5; nutrients = 0.5; grazing = 0.35; gradientEnabled = false;
+            for (let i = 0; i < grid.length; i++) {
+                let rand = Math.random();
+                if (rand < 0.40) grid[i] = 1;
+                else if (rand < 0.70) grid[i] = 3;
+            }
+        } else if (systemType === 'gradient') {
+            moisture = 0.5; nutrients = 0.5; grazing = 0.10; gradientEnabled = true;
+            for (let i = 0; i < grid.length; i++) {
+                if (Math.random() < 0.3) grid[i] = 1;
+            }
+        }
 
-        </section>
+        // Sincronizar UI
+        document.getElementById('sliderMoisture').value = moisture * 100;
+        document.getElementById('valMoisture').innerText = (moisture * 100) + '%';
+        document.getElementById('sliderNutrients').value = nutrients * 100;
+        document.getElementById('valNutrients').innerText = (nutrients * 100) + '%';
+        document.getElementById('sliderGrazing').value = grazing * 100;
+        document.getElementById('valGrazing').innerText = (grazing * 100) + '%';
+        document.getElementById('chkGradient').checked = gradientEnabled;
 
-    </main>
+        resetChart();
+        render();
+        updateMetrics();
+    }
 
-    <!-- Footer -->
-    <footer class="bg-slate-800 border-t border-slate-700 text-slate-400 text-xs py-3 px-6 text-center">
-        Simulador Comparativo de Ecología Agrícola — Monocultivo | Policultivo | Pastoreo bajo Monte
-    </footer>
+    function stepSimulation() {
+        stepCount++;
+        document.getElementById('stepCounter').innerText = `Tiempo: ${stepCount} ciclos`;
 
-    <!-- SIMULATOR JAVASCRIPT LOGIC -->
-    <script>
-        const COLS = 100;
-        const ROWS = 50;
-        let grid = new Array(COLS * ROWS).fill(0); // 0: Bare, 1: Crop/Grass, 2: Weed, 3: Woody
-        let nextGrid = new Array(COLS * ROWS).fill(0);
+        // Gestionar temporizador de labranza y cartel indicador
+        const statusBadge = document.getElementById('statusBadge');
+        if (tillageEffectTimer > 0) {
+            tillageEffectTimer--;
+            statusBadge.classList.add('active');
+        } else {
+            statusBadge.classList.remove('active');
+        }
 
-        let isRunning = false;
-        let stepCount = 0;
-        let timer = null;
-        let speedMs = 80;
+        for (let r = 0; r < ROWS; r++) {
+            const rowMoisture = gradientEnabled ? Math.min(1.0, Math.max(0.1, 0.15 + (r / ROWS) * 0.8)) : moisture;
 
-        let currentSystem = 'monocultura'; // 'monocultura', 'policultivo', 'silvopastoril', 'gradient'
-        let moisture = 0.7;
-        let gradientEnabled = false;
-        let nutrients = 0.75;
-        let grazing = 0.0;
+            for (let c = 0; c < COLS; c++) {
+                const idx = r * COLS + c;
+                const current = grid[idx];
 
-        const COLOR_BARE = "#334155";
-        const COLOR_CROP = "#10b981";  // Emerald
-        const COLOR_WEED = "#f59e0b";  // Amber
-        const COLOR_WOODY = "#0284c7"; // Sky Blue
-
-        const canvas = document.getElementById('spatialCanvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = COLS * 8;
-        canvas.height = ROWS * 8;
-
-        const chartCtx = document.getElementById('timeSeriesChart').getContext('2d');
-        const chartData = {
-            labels: [],
-            datasets: [
-                { label: 'Suelo Desnudo', data: [], borderColor: '#94a3b8', backgroundColor: 'rgba(148,163,184,0.1)', borderWidth: 1.5, fill: false, pointRadius: 0 },
-                { label: 'Cultivo/Pasto (E1)', data: [], borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', borderWidth: 2, fill: false, pointRadius: 0 },
-                { label: 'Maleza/Acompañante (E2)', data: [], borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', borderWidth: 2, fill: false, pointRadius: 0 },
-                { label: 'Monte/Leñosa (E3)', data: [], borderColor: '#0284c7', backgroundColor: 'rgba(2,132,199,0.1)', borderWidth: 2, fill: false, pointRadius: 0 }
-            ]
-        };
-
-        const timeChart = new Chart(chartCtx, {
-            type: 'line',
-            data: chartData,
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false,
-                scales: {
-                    x: {
-                        display: true,
-                        grid: { color: '#334155' },
-                        ticks: { color: '#94a3b8', font: { size: 10 } },
-                        title: { display: true, text: 'Ciclos de Tiempo', color: '#64748b', font: { size: 10 } }
-                    },
-                    y: {
-                        display: true,
-                        min: 0,
-                        max: 100,
-                        grid: { color: '#334155' },
-                        ticks: { color: '#94a3b8', font: { size: 10 } },
-                        title: { display: true, text: 'Cobertura (%)', color: '#64748b', font: { size: 10 } }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        labels: { color: '#cbd5e1', font: { size: 11 }, boxWidth: 12 }
+                // Vecindario
+                let nCrop = 0, nWeed = 0, nWoody = 0, nBare = 0;
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        if (dr === 0 && dc === 0) continue;
+                        const nr = (r + dr + ROWS) % ROWS;
+                        const nc = (c + dc + COLS) % COLS;
+                        const nVal = grid[nr * COLS + nc];
+                        if (nVal === 1) nCrop++;
+                        else if (nVal === 2) nWeed++;
+                        else if (nVal === 3) nWoody++;
+                        else nBare++;
                     }
                 }
+
+                let suitCrop = rowMoisture * nutrients * 1.25;
+                let suitWeed = (1.1 - rowMoisture * 0.25) * 0.85;
+                let suitWoody = rowMoisture * 1.2;
+
+                let grazeLossCrop = grazing * 0.40;
+                let grazeLossWeed = grazing * 0.12;
+                let grazeLossWoody = grazing * 0.03;
+
+                let nextVal = current;
+
+                if (current === 0) { // Colonización
+                    // Si hay labranza activa, frena drásticamente la probabilidad de germinación del banco
+                    let seedBankProb = (tillageEffectTimer > 0) ? 0.001 : 0.020;
+
+                    let probCrop = (nCrop / 8) * suitCrop;
+                    let probWeed = (nWeed / 8) * suitWeed + seedBankProb;
+                    let probWoody = (nWoody / 8) * suitWoody * 0.35;
+
+                    let rand = Math.random();
+                    if (rand < probCrop) nextVal = 1;
+                    else if (rand < probCrop + probWeed) nextVal = 2;
+                    else if (rand < probCrop + probWeed + probWoody) nextVal = 3;
+
+                } else if (current === 1) { // Cultivo
+                    if (Math.random() < grazeLossCrop) {
+                        nextVal = 0;
+                    } else if (nWoody >= 3 && Math.random() < 0.20 * suitWoody) {
+                        nextVal = 3;
+                    } else if (currentSystem === 'monocultura' && nWeed >= 4 && Math.random() < 0.35) {
+                        nextVal = 2;
+                    } else if (suitCrop < 0.20 && Math.random() < 0.12) {
+                        nextVal = 0;
+                    }
+
+                } else if (current === 2) { // Maleza
+                    if (Math.random() < grazeLossWeed) {
+                        nextVal = 0;
+                    } else if (nWoody >= 4 && Math.random() < 0.25 * suitWoody) {
+                        nextVal = 3;
+                    } else if (currentSystem === 'policultivo' && nCrop >= 5 && Math.random() < 0.25) {
+                        nextVal = 1;
+                    } else if (Math.random() < 0.03) {
+                        nextVal = 0;
+                    }
+
+                } else if (current === 3) { // Leñosa
+                    if (Math.random() < grazeLossWoody) {
+                        nextVal = 0;
+                    } else if (rowMoisture < 0.18 && Math.random() < 0.08) {
+                        nextVal = 0;
+                    }
+                }
+
+                nextGrid[idx] = nextVal;
+            }
+        }
+
+        grid = [...nextGrid];
+        render();
+        updateMetrics();
+    }
+
+    function updateMetrics() {
+        let bare = 0, crop = 0, weed = 0, woody = 0;
+        const total = grid.length;
+
+        for (let i = 0; i < total; i++) {
+            if (grid[i] === 0) bare++;
+            else if (grid[i] === 1) crop++;
+            else if (grid[i] === 2) weed++;
+            else if (grid[i] === 3) woody++;
+        }
+
+        const pBare = (bare / total) * 100;
+        const pCrop = (crop / total) * 100;
+        const pWeed = (weed / total) * 100;
+        const pWoody = (woody / total) * 100;
+
+        document.getElementById('metricBare').innerText = pBare.toFixed(1) + '%';
+        document.getElementById('metricCrop').innerText = pCrop.toFixed(1) + '%';
+        document.getElementById('metricWeed').innerText = pWeed.toFixed(1) + '%';
+        document.getElementById('metricWoody').innerText = pWoody.toFixed(1) + '%';
+
+        // Índice Shannon-Wiener
+        let h = 0;
+        [pCrop, pWeed, pWoody].forEach(p => {
+            if (p > 0) {
+                let pi = p / 100;
+                h -= pi * Math.log(pi);
             }
         });
+        document.getElementById('diversityIndex').innerText = `Índice Shannon-Wiener (H'): ${h.toFixed(2)}`;
 
-        function loadSystem(systemType) {
-            currentSystem = systemType;
-            grid.fill(0);
-            stepCount = 0;
-
-            const bMon = document.getElementById('btnPresetMonocultura');
-            const bPol = document.getElementById('btnPresetPolicultivo');
-            const bSil = document.getElementById('btnPresetSilvopastoril');
-            const bGra = document.getElementById('btnPresetGradient');
-
-            // Reset styles
-            [bMon, bPol, bSil, bGra].forEach(b => {
-                b.className = "preset-btn bg-slate-700 hover:bg-slate-600 text-xs font-semibold px-3 py-2 rounded text-slate-200 border border-slate-600 transition flex items-center";
-            });
-
-            const bannerTitle = document.getElementById('bannerTitle');
-            const bannerDesc = document.getElementById('bannerDesc');
-
-            if (systemType === 'monocultura') {
-                bMon.className = "preset-btn bg-emerald-700 hover:bg-emerald-600 text-xs font-semibold px-3 py-2 rounded text-white border border-emerald-500 shadow transition flex items-center";
-                bannerTitle.innerText = "Sistema 1: Monocultivo Comercial";
-                bannerDesc.innerText = "Siembra uniforme de un único cultivo (E1). Alta vulnerabilidad al surgimiento de malezas invasoras (E2) en ausencia de labranza.";
-                
-                moisture = 0.70;
-                nutrients = 0.80;
-                grazing = 0.0;
-                gradientEnabled = false;
-
-                // Plant crop rows + tiny weed seed bank
-                for (let r = 0; r < ROWS; r++) {
-                    for (let c = 0; c < COLS; c++) {
-                        const idx = r * COLS + c;
-                        if (c % 4 === 0 || c % 4 === 1) {
-                            grid[idx] = 1; // Crop
-                        } else if (Math.random() < 0.04) {
-                            grid[idx] = 2; // Weed seed bank
-                        }
-                    }
-                }
-
-            } else if (systemType === 'policultivo') {
-                bPol.className = "preset-btn bg-emerald-700 hover:bg-emerald-600 text-xs font-semibold px-3 py-2 rounded text-white border border-emerald-500 shadow transition flex items-center";
-                bannerTitle.innerText = "Sistema 2: Policultivo / Consorcio Agroecológico";
-                bannerDesc.innerText = "Mezcla sinérgica de especie principal (E1) y especie acompañante/fijadora (E2). La alta ocupación de nicho suprime la invasión de malezas espontáneas.";
-                
-                moisture = 0.65;
-                nutrients = 0.70;
-                grazing = 0.05;
-                gradientEnabled = false;
-
-                // Mosaic of E1 and E2 coexisting
-                for (let i = 0; i < grid.length; i++) {
-                    let rand = Math.random();
-                    if (rand < 0.45) grid[i] = 1;      // Principal Crop
-                    else if (rand < 0.80) grid[i] = 2; // Companion species
-                }
-
-            } else if (systemType === 'silvopastoril') {
-                bSil.className = "preset-btn bg-emerald-700 hover:bg-emerald-600 text-xs font-semibold px-3 py-2 rounded text-white border border-emerald-500 shadow transition flex items-center";
-                bannerTitle.innerText = "Sistema 3: Pastoreo bajo Monte (Silvopastoril)";
-                bannerDesc.innerText = "Integración de árboles/arbustos de monte (E3), estrato herbáceo forrajero (E1) y pastoreo bovino regulado. El sombreo y ramoneo estabilizan el sistema.";
-                
-                moisture = 0.60;
-                nutrients = 0.65;
-                grazing = 0.25; // Controlled grazing
-                gradientEnabled = false;
-
-                // Clusters of woody trees + grass understorey + light weeds
-                for (let r = 0; r < ROWS; r++) {
-                    for (let c = 0; c < COLS; c++) {
-                        const idx = r * COLS + c;
-                        let rand = Math.random();
-                        if (rand < 0.25) grid[idx] = 3;      // Monte/Woody
-                        else if (rand < 0.70) grid[idx] = 1; // Pasto deseable
-                        else if (rand < 0.80) grid[idx] = 2; // Maleza/Herbácea
-                    }
-                }
-
-            } else if (systemType === 'gradient') {
-                bGra.className = "preset-btn bg-emerald-700 hover:bg-emerald-600 text-xs font-semibold px-3 py-2 rounded text-white border border-emerald-500 shadow transition flex items-center";
-                bannerTitle.innerText = "Gradiente Topográfico y Transición Ecotonal";
-                bannerDesc.innerText = "Variación de humedad desde la cumbre seca (arriba) hasta la vagonada húmeda (abajo). Permite observar la zonation ecológica natural.";
-                
-                moisture = 0.50;
-                nutrients = 0.60;
-                grazing = 0.10;
-                gradientEnabled = true;
-
-                for (let r = 0; r < ROWS; r++) {
-                    for (let c = 0; c < COLS; c++) {
-                        const idx = r * COLS + c;
-                        let rand = Math.random();
-                        if (rand < 0.20) {
-                            grid[idx] = (r < ROWS * 0.35) ? 2 : (r < ROWS * 0.7 ? 1 : 3);
-                        }
-                    }
-                }
-            }
-
-            // Sync controls
-            document.getElementById('sliderMoisture').value = Math.round(moisture * 100);
-            document.getElementById('valMoisture').innerText = Math.round(moisture * 100) + '%';
-            document.getElementById('sliderNutrients').value = Math.round(nutrients * 100);
-            document.getElementById('valNutrients').innerText = Math.round(nutrients * 100) + '%';
-            document.getElementById('sliderGrazing').value = Math.round(grazing * 100);
-            document.getElementById('valGrazing').innerText = Math.round(grazing * 100) + '%';
-            document.getElementById('chkGradient').checked = gradientEnabled;
-            document.getElementById('gradientIndicator').style.display = gradientEnabled ? 'flex' : 'none';
-
-            resetChart();
-            render();
-            updateMetrics();
+        // Gráfico temporal
+        if (chartData.labels.length > 60) {
+            chartData.labels.shift();
+            chartData.datasets.forEach(ds => ds.data.shift());
         }
 
-        function render() {
-            const cellW = canvas.width / COLS;
-            const cellH = canvas.height / ROWS;
+        chartData.labels.push(stepCount);
+        chartData.datasets[0].data.push(pBare.toFixed(1));
+        chartData.datasets[1].data.push(pCrop.toFixed(1));
+        chartData.datasets[2].data.push(pWeed.toFixed(1));
+        chartData.datasets[3].data.push(pWoody.toFixed(1));
 
-            for (let r = 0; r < ROWS; r++) {
-                for (let c = 0; c < COLS; c++) {
-                    const val = grid[r * COLS + c];
-                    ctx.fillStyle = val === 1 ? COLOR_CROP : val === 2 ? COLOR_WEED : val === 3 ? COLOR_WOODY : COLOR_BARE;
-                    ctx.fillRect(c * cellW, r * cellH, cellW, cellH);
-                }
-            }
-        }
+        timeChart.update();
+    }
 
-        function stepSimulation() {
-            stepCount++;
-            document.getElementById('stepCounter').innerText = `Tiempo: ${stepCount} ciclos`;
+    function resetChart() {
+        chartData.labels = [];
+        chartData.datasets.forEach(ds => ds.data = []);
+        timeChart.update();
+    }
 
-            for (let r = 0; r < ROWS; r++) {
-                const rowMoisture = gradientEnabled ? Math.min(1.0, Math.max(0.1, 0.15 + (r / ROWS) * 0.8)) : moisture;
-
-                for (let c = 0; c < COLS; c++) {
-                    const idx = r * COLS + c;
-                    const current = grid[idx];
-
-                    // Count neighbors
-                    let nCrop = 0, nWeed = 0, nWoody = 0, nBare = 0;
-                    for (let dr = -1; dr <= 1; dr++) {
-                        for (let dc = -1; dc <= 1; dc++) {
-                            if (dr === 0 && dc === 0) continue;
-                            const nr = (r + dr + ROWS) % ROWS;
-                            const nc = (c + dc + COLS) % COLS;
-                            const nVal = grid[nr * COLS + nc];
-                            if (nVal === 1) nCrop++;
-                            else if (nVal === 2) nWeed++;
-                            else if (nVal === 3) nWoody++;
-                            else nBare++;
-                        }
-                    }
-
-                    // Environmental suitabilities
-                    let suitCrop = rowMoisture * nutrients * 1.25;
-                    let suitWeed = (1.1 - rowMoisture * 0.25) * 0.85;
-                    let suitWoody = rowMoisture * 1.2;
-
-                    // Grazing differential
-                    let grazeLossCrop = grazing * 0.40;
-                    let grazeLossWeed = grazing * 0.12;
-                    let grazeLossWoody = grazing * 0.03;
-
-                    let nextVal = current;
-
-                    if (current === 0) { // Colonization of bare space
-                        let probCrop = (nCrop / 8) * suitCrop;
-                        let probWeed = (nWeed / 8) * suitWeed + 0.015; // Seed bank
-                        let probWoody = (nWoody / 8) * suitWoody * 0.35;
-
-                        let rand = Math.random();
-                        if (rand < probCrop) nextVal = 1;
-                        else if (rand < probCrop + probWeed) nextVal = 2;
-                        else if (rand < probCrop + probWeed + probWoody) nextVal = 3;
-
-                    } else if (current === 1) { // Crop / Pasture
-                        if (Math.random() < grazeLossCrop) {
-                            nextVal = 0;
-                        } else if (nWoody >= 3 && Math.random() < 0.20 * suitWoody) {
-                            nextVal = 3; // Shaded by woody canopy
-                        } else if (currentSystem === 'monocultura' && nWeed >= 4 && Math.random() < 0.35) {
-                            nextVal = 2; // Overrun in monoculture
-                        } else if (suitCrop < 0.20 && Math.random() < 0.12) {
-                            nextVal = 0; // Water stress
-                        }
-
-                    } else if (current === 2) { // Maleza / Companion
-                        if (Math.random() < grazeLossWeed) {
-                            nextVal = 0;
-                        } else if (nWoody >= 4 && Math.random() < 0.25 * suitWoody) {
-                            nextVal = 3;
-                        } else if (currentSystem === 'policultivo' && nCrop >= 5 && Math.random() < 0.25) {
-                            nextVal = 1; // Controlled in polyculture
-                        } else if (Math.random() < 0.03) {
-                            nextVal = 0;
-                        }
-
-                    } else if (current === 3) { // Leñosa / Monte
-                        if (Math.random() < grazeLossWoody) {
-                            nextVal = 0;
-                        } else if (rowMoisture < 0.18 && Math.random() < 0.08) {
-                            nextVal = 0;
-                        }
-                    }
-
-                    nextGrid[idx] = nextVal;
-                }
-            }
-
-            grid.set(nextGrid);
-            render();
-            updateMetrics();
-        }
-
-        function updateMetrics() {
-            let countBare = 0, countCrop = 0, countWeed = 0, countWoody = 0;
-            const total = grid.length;
-
-            for (let i = 0; i < total; i++) {
-                if (grid[i] === 0) countBare++;
-                else if (grid[i] === 1) countCrop++;
-                else if (grid[i] === 2) countWeed++;
-                else if (grid[i] === 3) countWoody++;
-            }
-
-            const pBare = ((countBare / total) * 100).toFixed(1);
-            const pCrop = ((countCrop / total) * 100).toFixed(1);
-            const pWeed = ((countWeed / total) * 100).toFixed(1);
-            const pWoody = ((countWoody / total) * 100).toFixed(1);
-
-            document.getElementById('metricBare').innerText = pBare + '%';
-            document.getElementById('metricCrop').innerText = pCrop + '%';
-            document.getElementById('metricWeed').innerText = pWeed + '%';
-            document.getElementById('metricWoody').innerText = pWoody + '%';
-
-            // Shannon-Wiener Diversity Index H'
-            let hIndex = 0;
-            [countCrop, countWeed, countWoody].forEach(count => {
-                let pi = count / (total - countBare || 1);
-                if (pi > 0) hIndex -= pi * Math.log(pi);
-            });
-            document.getElementById('diversityIndex').innerText = `Índice Shannon-Wiener (H'): ${hIndex.toFixed(2)}`;
-
-            if (stepCount % 2 === 0 || stepCount === 1) {
-                if (chartData.labels.length > 50) {
-                    chartData.labels.shift();
-                    chartData.datasets.forEach(ds => ds.data.shift());
-                }
-                chartData.labels.push(stepCount);
-                chartData.datasets[0].data.push(parseFloat(pBare));
-                chartData.datasets[1].data.push(parseFloat(pCrop));
-                chartData.datasets[2].data.push(parseFloat(pWeed));
-                chartData.datasets[3].data.push(parseFloat(pWoody));
-                timeChart.update();
-            }
-        }
-
-        function resetChart() {
-            chartData.labels = [];
-            chartData.datasets.forEach(ds => ds.data = []);
-            timeChart.update();
-        }
-
-        function applyTillage() {
-            for (let i = 0; i < grid.length; i++) {
-                if (grid[i] === 1 || grid[i] === 2) {
-                    if (Math.random() < 0.88) grid[i] = 0;
-                } else if (grid[i] === 3) {
-                    if (Math.random() < 0.50) grid[i] = 0;
-                }
-            }
-            render();
-            updateMetrics();
-        }
-
-        function applyFire() {
-            for (let i = 0; i < grid.length; i++) {
-                if (grid[i] !== 0 && Math.random() < 0.92) {
-                    grid[i] = 0;
-                }
-            }
-            render();
-            updateMetrics();
-        }
-
-        function play() {
-            if (isRunning) return;
+    function play() {
+        if (!isRunning) {
             isRunning = true;
             timer = setInterval(stepSimulation, speedMs);
         }
+    }
 
-        function pause() {
-            isRunning = false;
-            if (timer) clearInterval(timer);
+    function pause() {
+        isRunning = false;
+        clearInterval(timer);
+    }
+
+    // --- EVENT LISTENERS ---
+    document.getElementById('btnPresetMonocultura').addEventListener('click', () => loadSystem('monocultura'));
+    document.getElementById('btnPresetPolicultivo').addEventListener('click', () => loadSystem('policultivo'));
+    document.getElementById('btnPresetSilvopastoril').addEventListener('click', () => loadSystem('silvopastoril'));
+    document.getElementById('btnPresetGradient').addEventListener('click', () => loadSystem('gradient'));
+
+    document.getElementById('btnPlay').addEventListener('click', play);
+    document.getElementById('btnPause').addEventListener('click', pause);
+    document.getElementById('btnStep').addEventListener('click', () => { pause(); stepSimulation(); });
+    document.getElementById('btnReset').addEventListener('click', () => { pause(); loadSystem(currentSystem); });
+
+    document.getElementById('speedSlider').addEventListener('input', (e) => {
+        speedMs = 200 - (e.target.value * 3.5);
+        if (isRunning) { pause(); play(); }
+    });
+
+    document.getElementById('sliderMoisture').addEventListener('input', (e) => {
+        moisture = e.target.value / 100;
+        document.getElementById('valMoisture').innerText = e.target.value + '%';
+    });
+
+    document.getElementById('sliderNutrients').addEventListener('input', (e) => {
+        nutrients = e.target.value / 100;
+        document.getElementById('valNutrients').innerText = e.target.value + '%';
+    });
+
+    document.getElementById('sliderGrazing').addEventListener('input', (e) => {
+        grazing = e.target.value / 100;
+        document.getElementById('valGrazing').innerText = e.target.value + '%';
+    });
+
+    document.getElementById('chkGradient').addEventListener('change', (e) => {
+        gradientEnabled = e.target.checked;
+        document.getElementById('gradientIndicator').style.display = gradientEnabled ? 'inline' : 'none';
+    });
+
+    // PERTURBACIÓN: LABRANZA / CONTROL
+    document.getElementById('btnDisturbTillage').addEventListener('click', () => {
+        for (let i = 0; i < grid.length; i++) {
+            if (grid[i] === 2) grid[i] = 0; // Remueve malezas
+            else if (grid[i] === 1 && Math.random() < 0.12) grid[i] = 0; // Daño mecánico leve al cultivo
         }
+        
+        // Ventana de control residual por 18 ciclos
+        tillageEffectTimer = 18;
 
-        // Event Listeners
-        document.getElementById('btnPlay').addEventListener('click', play);
-        document.getElementById('btnPause').addEventListener('click', pause);
-        document.getElementById('btnStep').addEventListener('click', () => { pause(); stepSimulation(); });
-        document.getElementById('btnReset').addEventListener('click', () => { pause(); loadSystem(currentSystem); });
+        render();
+        updateMetrics();
+    });
 
-        document.getElementById('speedSlider').addEventListener('input', (e) => {
-            speedMs = 2000 / e.target.value;
-            if (isRunning) {
-                pause();
-                play();
-            }
-        });
+    // PERTURBACIÓN: INCENDIO
+    document.getElementById('btnDisturbFire').addEventListener('click', () => {
+        for (let i = 0; i < grid.length; i++) {
+            if (Math.random() < 0.80) grid[i] = 0; // Incendio masivo
+        }
+        render();
+        updateMetrics();
+    });
 
-        document.getElementById('sliderMoisture').addEventListener('input', (e) => {
-            moisture = e.target.value / 100;
-            document.getElementById('valMoisture').innerText = e.target.value + '%';
-        });
+    // Interacción manual por clic en la grilla
+    canvas.addEventListener('click', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const c = Math.floor((x / rect.width) * COLS);
+        const r = Math.floor((y / rect.height) * ROWS);
+        const idx = r * COLS + c;
 
-        document.getElementById('sliderNutrients').addEventListener('input', (e) => {
-            nutrients = e.target.value / 100;
-            document.getElementById('valNutrients').innerText = e.target.value + '%';
-        });
+        grid[idx] = (grid[idx] + 1) % 4;
+        render();
+        updateMetrics();
+    });
 
-        document.getElementById('sliderGrazing').addEventListener('input', (e) => {
-            grazing = e.target.value / 100;
-            document.getElementById('valGrazing').innerText = e.target.value + '%';
-        });
-
-        document.getElementById('chkGradient').addEventListener('change', (e) => {
-            gradientEnabled = e.target.checked;
-            document.getElementById('gradientIndicator').style.display = gradientEnabled ? 'flex' : 'none';
-        });
-
-        document.getElementById('btnDisturbTillage').addEventListener('click', applyTillage);
-        document.getElementById('btnDisturbFire').addEventListener('click', applyFire);
-
-        canvas.addEventListener('click', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            const c = Math.floor((x / rect.width) * COLS);
-            const r = Math.floor((y / rect.height) * ROWS);
-
-            const idx = r * COLS + c;
-            grid[idx] = (grid[idx] + 1) % 4;
-            render();
-            updateMetrics();
-        });
-
-        // Preset Listeners
-        document.getElementById('btnPresetMonocultura').addEventListener('click', () => { pause(); loadSystem('monocultura'); });
-        document.getElementById('btnPresetPolicultivo').addEventListener('click', () => { pause(); loadSystem('policultivo'); });
-        document.getElementById('btnPresetSilvopastoril').addEventListener('click', () => { pause(); loadSystem('silvopastoril'); });
-        document.getElementById('btnPresetGradient').addEventListener('click', () => { pause(); loadSystem('gradient'); });
-
-        window.onload = () => {
-            loadSystem('monocultura');
-        };
-    </script>
+    // Carga inicial
+    loadSystem('monocultura');
+</script>
 </body>
 </html>
