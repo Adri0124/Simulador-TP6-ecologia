@@ -241,13 +241,13 @@
 
 <div class="header">
     <h1>Simulador de Sistemas Productivos Agroecológicos</h1>
-    <p>Dinámica Ecológica Continua: Cultivos Anuales (1 Año) vs Sucesión y Monte (20 Años)</p>
+    <p>Dinámica Ecológica Continua: Cultivos Anuales (1 Año) vs Sucesión y MBGI (20 Años)</p>
 </div>
 
 <div class="preset-bar">
     <button id="btnPresetMonocultura" class="btn-preset active">1. Monocultivo (1 Año)</button>
     <button id="btnPresetPolicultivo" class="btn-preset">2. Policultivo (1 Año)</button>
-    <button id="btnPresetSilvopastoril" class="btn-preset">3. Sucesión y Pastoreo / MBGI (20 Años)</button>
+    <button id="btnPresetSilvopastoril" class="btn-preset">3. Sucesión y MBGI (20 Años)</button>
 </div>
 
 <div class="container">
@@ -313,11 +313,11 @@
                 <div class="value" id="metricCrop" style="color: #27ae60;">0.0%</div>
             </div>
             <div class="metric-card">
-                <div class="title">Pionera / Maleza (E2)</div>
+                <div class="title">Pionera / Arbusto Menor (E2)</div>
                 <div class="value" id="metricWeed" style="color: #f39c12;">0.0%</div>
             </div>
             <div class="metric-card">
-                <div class="title">Monte / Leñosa (E3)</div>
+                <div class="title">Monte / Renoval (E3)</div>
                 <div class="value" id="metricWoody" style="color: #2980b9;">0.0%</div>
             </div>
         </div>
@@ -360,8 +360,8 @@
     const COLOR_MAP = {
         0: '#1b2631', // Suelo Desnudo
         1: '#27ae60', // E1: Cultivo / Pasto
-        2: '#f39c12', // E2: Pioneras / Malezas
-        3: '#2980b9'  // E3: Monte / Leñosa
+        2: '#f39c12', // E2: Pioneras / Arbustos Menores
+        3: '#2980b9'  // E3: Monte / Renoval
     };
 
     let isRunning = false;
@@ -376,6 +376,7 @@
     let gradientEnabled = false;
 
     let activeRegime = 'standard'; 
+    let activeSubActionId = null; // Control de selección visual activa
 
     const canvas = document.getElementById('gridCanvas');
     const ctx = canvas.getContext('2d');
@@ -388,8 +389,8 @@
         datasets: [
             { label: 'Suelo Desnudo', borderColor: '#94a3b8', data: [], fill: false, tension: 0.1, pointRadius: 0 },
             { label: 'Cultivo/Pasto (E1)', borderColor: '#27ae60', data: [], fill: false, tension: 0.1, pointRadius: 0 },
-            { label: 'Pioneras/Maleza (E2)', borderColor: '#f39c12', data: [], fill: false, tension: 0.1, pointRadius: 0 },
-            { label: 'Monte/Leñosa (E3)', borderColor: '#2980b9', data: [], fill: false, tension: 0.1, pointRadius: 0 }
+            { label: 'Pionera/Arbusto (E2)', borderColor: '#f39c12', data: [], fill: false, tension: 0.1, pointRadius: 0 },
+            { label: 'Monte/Renoval (E3)', borderColor: '#2980b9', data: [], fill: false, tension: 0.1, pointRadius: 0 }
         ]
     };
 
@@ -501,9 +502,8 @@
 
                 let nextVal = current;
 
-                if (current === 0) { // Suelo Desnudo -> Sucesión Secundaria con Pioneras
+                if (current === 0) { // Suelo Desnudo -> Sucesión Secundaria
                     let pCrop = (nCrop > 0) ? (nCrop / 8) * currentMoisture * nutrients * 0.60 : 0.005;
-                    // Las pioneras colonizan rápido el suelo desnudo, aumentando la diversidad inicial y protegiendo el suelo
                     let pWeed = 0.08 + (nWeed > 0 ? (nWeed / 8) * 0.30 : 0.0); 
                     let pWoody = (nWoody > 0) ? (nWoody / 8) * currentMoisture * 0.15 : 0.003;
 
@@ -512,14 +512,15 @@
                         pWeed *= 2.0; // Arbustización invasiva por sobrepastoreo
                         pWoody = 0.0; 
                     } else if (activeRegime === 'mbgi') {
+                        // MBGI: Favorece el establecimiento de renovales (E3) y arbustos menores/pioneras benéficas (E2)
                         pCrop *= 1.2;
-                        pWoody *= 1.3;
-                        pWeed *= 0.5;
+                        pWoody *= 1.8; // Impulsa el renoval forestal
+                        pWeed *= 0.7;  // Controla la maleza estéril transformándola en arbustos menores
                     }
 
                     let rand = Math.random();
                     if (rand < pCrop) nextVal = 1;
-                    else if (rand < pCrop + pWeed) nextVal = 2; // Las pioneras elevan la diversidad local (H')
+                    else if (rand < pCrop + pWeed) nextVal = 2; 
                     else if (rand < pCrop + pWeed + pWoody) nextVal = 3;
 
                 } else if (current === 1) { // Cultivo / Pasto
@@ -528,20 +529,20 @@
                     let weedInvasion = (nWeed / 8) * 0.25;
 
                     if (activeRegime === 'overgrazing') lossProb += 0.45;
+                    if (activeRegime === 'mbgi') lossProb *= 0.6; // El MBGI protege la pastura mediante descanso rotativo
 
                     if (Math.random() < lossProb) nextVal = 0;
                     else if (Math.random() < weedInvasion) nextVal = 2;
 
-                } else if (current === 2) { // Pioneras / Malezas
-                    // Sucesión natural: las pioneras mejoran el suelo y permiten el avance gradual de leñosas o pasturas
-                    let replaceByWoody = (nWoody / 8) * 0.12 + 0.01;
+                } else if (current === 2) { // Pioneras / Arbustos Menores
+                    let replaceByWoody = (nWoody / 8) * 0.15 + 0.02; // Facilita el paso hacia renoval
                     let replaceByCrop = (nCrop / 8) * nutrients * 0.15;
 
                     if (Math.random() < replaceByWoody) nextVal = 3;
                     else if (Math.random() < replaceByCrop) nextVal = 1;
 
-                } else if (current === 3) { // Monte / Leñosa
-                    let dieback = (1 - currentMoisture) * 0.03 + (grazing > 0.70 ? 0.06 : 0.01);
+                } else if (current === 3) { // Monte / Renoval
+                    let dieback = (1 - currentMoisture) * 0.03 + (grazing > 0.70 ? 0.06 : 0.005);
                     if (Math.random() < dieback) nextVal = 0;
                 }
 
@@ -556,9 +557,21 @@
         if (stepCount >= totalTargetMonths) pause();
     }
 
-    function setRegime(regime, labelText) {
+    function setRegime(regime, labelText, buttonId) {
         activeRegime = regime;
+        activeSubActionId = buttonId;
         document.getElementById('activeRegimeLabel').innerText = `Régimen: ${labelText}`;
+        
+        // Actualizar estado visual de los botones de manejo
+        document.querySelectorAll('#dynamicManagementControls button').forEach(btn => {
+            if (btn.id === 'btnToggleGradient') return;
+            if (btn.id === buttonId) {
+                btn.className = 'btn-action-highlight';
+            } else {
+                btn.className = btn.dataset.defaultClass || 'btn-action';
+            }
+        });
+
         render();
         updateMetrics();
     }
@@ -603,31 +616,33 @@
 
         if (currentSystem === 'monocultura') {
             container.innerHTML = `
-                <button id="btnConvTillage" class="btn-action">🚜 Labranza Convencional</button>
-                <button id="btnDirectSeeding" class="btn-action-highlight">🌱 Siembra Directa (Rastrojo)</button>
-                <button id="btnServiceCrop" class="btn-action">🌾 Cultivo de Servicios</button>
+                <button id="btnConvTillage" class="btn-action" data-default-class="btn-action">🚜 Labranza Convencional</button>
+                <button id="btnDirectSeeding" class="btn-action" data-default-class="btn-action">🌱 Siembra Directa (Rastrojo)</button>
+                <button id="btnServiceCrop" class="btn-action" data-default-class="btn-action">🌾 Cultivo de Servicios</button>
             `;
             container.appendChild(gradBtn);
-            document.getElementById('btnConvTillage').onclick = () => { setRegime('standard', 'Labranza Convencional'); applyManagementDistribution(0.40, 0.10, 0.0); };
-            document.getElementById('btnDirectSeeding').onclick = () => { setRegime('direct_seeding', 'Siembra Directa + Cobertura'); applyManagementDistribution(0.65, 0.02, 0.0); };
-            document.getElementById('btnServiceCrop').onclick = () => { setRegime('service_crop', 'Cultivo de Servicios Activo'); applyManagementDistribution(0.80, 0.05, 0.0); };
+
+            document.getElementById('btnConvTillage').onclick = () => { setRegime('standard', 'Labranza Convencional', 'btnConvTillage'); applyManagementDistribution(0.40, 0.10, 0.0); };
+            document.getElementById('btnDirectSeeding').onclick = () => { setRegime('direct_seeding', 'Siembra Directa + Cobertura', 'btnDirectSeeding'); applyManagementDistribution(0.65, 0.02, 0.0); };
+            document.getElementById('btnServiceCrop').onclick = () => { setRegime('service_crop', 'Cultivo de Servicios Activo', 'btnServiceCrop'); applyManagementDistribution(0.80, 0.05, 0.0); };
 
         } else if (currentSystem === 'policultivo') {
             container.innerHTML = `
-                <button id="btnHarvest" class="btn-action">🧺 Cosecha Selectiva E1</button>
-                <button id="btnMulch" class="btn-action-highlight">✂️ Manejo Biomasa / Macheteo</button>
-                <button id="btnFire" class="btn-action-danger">🔥 Quema / Incendio Prescripto</button>
+                <button id="btnHarvest" class="btn-action" data-default-class="btn-action">🧺 Cosecha Selectiva E1</button>
+                <button id="btnMulch" class="btn-action" data-default-class="btn-action">✂️ Manejo Biomasa / Macheteo</button>
+                <button id="btnFire" class="btn-action-danger" data-default-class="btn-action-danger">🔥 Quema / Incendio Prescripto</button>
             `;
             container.appendChild(gradBtn);
-            document.getElementById('btnHarvest').onclick = () => { setRegime('standard', 'Cosecha Realizada'); applyManagementDistribution(0.10, 0.30, 0.20); };
-            document.getElementById('btnMulch').onclick = () => { setRegime('standard', 'Abonado por Mulch'); applyManagementDistribution(0.50, 0.15, 0.20); };
-            document.getElementById('btnFire').onclick = () => { setRegime('standard', 'Impacto por Incendio'); applyManagementDistribution(0.05, 0.10, 0.05); };
+
+            document.getElementById('btnHarvest').onclick = () => { setRegime('standard', 'Cosecha Realizada', 'btnHarvest'); applyManagementDistribution(0.10, 0.30, 0.20); };
+            document.getElementById('btnMulch').onclick = () => { setRegime('standard', 'Abonado por Mulch', 'btnMulch'); applyManagementDistribution(0.50, 0.15, 0.20); };
+            document.getElementById('btnFire').onclick = () => { setRegime('standard', 'Impacto por Incendio', 'btnFire'); applyManagementDistribution(0.05, 0.10, 0.05); };
 
         } else if (currentSystem === 'silvopastoril') {
             container.innerHTML = `
-                <button id="btnOvergraze" class="btn-action-danger">⚠️ Sobrepastoreo Severo (Arbustización)</button>
-                <button id="btnMBGI" class="btn-action-highlight">🌳 Manejo MBGI (Sostenible)</button>
-                <button id="btnPruning" class="btn-action">🪓 Raleo / Poda Arbórea</button>
+                <button id="btnOvergraze" class="btn-action-danger" data-default-class="btn-action-danger">⚠️ Sobrepastoreo Severo (Arbustización)</button>
+                <button id="btnMBGI" class="btn-action" data-default-class="btn-action">🌳 Manejo MBGI (Renoval y Pastura)</button>
+                <button id="btnPruning" class="btn-action" data-default-class="btn-action">🪓 Raleo / Poda Arbórea</button>
             `;
             container.appendChild(gradBtn);
 
@@ -635,20 +650,26 @@
                 grazing = 0.85;
                 document.getElementById('sliderGrazing').value = 85;
                 document.getElementById('valGrazing').innerText = '85%';
-                setRegime('overgrazing', 'Sobrepastoreo Severo (Arbustización)');
+                setRegime('overgrazing', 'Sobrepastoreo Severo (Arbustización)', 'btnOvergraze');
                 applyManagementDistribution(0.05, 0.55, 0.15);
             };
             document.getElementById('btnMBGI').onclick = () => {
                 grazing = 0.25;
                 document.getElementById('sliderGrazing').value = 25;
                 document.getElementById('valGrazing').innerText = '25%';
-                setRegime('mbgi', 'MBGI (Ganadería Integrada Sostenible)');
-                applyManagementDistribution(0.35, 0.10, 0.40);
+                setRegime('mbgi', 'MBGI (Renoval, Arbustos Menores y Pastura)', 'btnMBGI');
+                applyManagementDistribution(0.35, 0.15, 0.35);
             };
             document.getElementById('btnPruning').onclick = () => {
-                setRegime('mbgi', 'Raleo de dosel aplicado');
+                setRegime('mbgi', 'Raleo de dosel aplicado', 'btnPruning');
                 applyManagementDistribution(0.40, 0.15, 0.30);
             };
+        }
+
+        // Restaurar estado visual activo si existía
+        if (activeSubActionId) {
+            const activeBtn = document.getElementById(activeSubActionId);
+            if (activeBtn) activeBtn.className = 'btn-action-highlight';
         }
     }
 
@@ -657,7 +678,8 @@
         currentSystem = systemType;
         stepCount = 0;
         gradientEnabled = false;
-        setRegime('standard', 'Sin Intervención / Normal');
+        activeSubActionId = null;
+        setRegime('standard', 'Sin Intervención / Normal', null);
 
         document.getElementById('statusBadge').classList.remove('active');
 
@@ -667,7 +689,7 @@
             document.getElementById('chartTitle').innerText = 'Evolución Temporal en 1 Año (Ciclo Agrícola)';
         } else {
             totalTargetYears = 20;
-            totalTargetMonths = 240; // Dinámica continua multianual sin reseteos forzados
+            totalTargetMonths = 240; 
             document.getElementById('chartTitle').innerText = 'Evolución Sucesional y Forestal (Escala 20 Años)';
         }
 
@@ -690,7 +712,7 @@
             applyManagementDistribution(0.25, 0.20, 0.07);
         } else if (systemType === 'silvopastoril') {
             document.getElementById('btnPresetSilvopastoril').classList.add('active');
-            descElem.innerHTML = '<strong>Sucesión y Pastoreo / MBGI (20 Años):</strong> Dinámica sucesional a largo plazo donde las pioneras elevan la biodiversidad inicial y el monte interactúa sin cortes forzados anuales.';
+            descElem.innerHTML = '<strong>Sucesión y MBGI (20 Años):</strong> Manejo integrado de bosques donde la ganadería controlada permite el desarrollo armónico de pasturas, arbustos menores y renovales.';
             moisture = 0.55; nutrients = 0.65; grazing = 0.25;
             applyManagementDistribution(0.30, 0.15, 0.30);
         }
