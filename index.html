@@ -261,7 +261,7 @@
         </div>
 
         <div class="card">
-            <span style="font-size: 0.8rem; color: var(--text-sub); font-weight: bold; display: block; margin-bottom: 10px;">FACTORES AMBIENTALES</span>
+            <span style="font-size: 0.8rem; color: var(--text-sub); font-weight: bold; display: block; margin-bottom: 10px;">FACTORES AMBIENTALES DINÁMICOS</span>
             
             <div class="control-group">
                 <label>Precipitación / Humedad <span id="valMoisture">70%</span></label>
@@ -472,12 +472,14 @@
         }
 
         for (let r = 0; r < ROWS; r++) {
-            const rowMoisture = gradientEnabled ? Math.min(1.0, Math.max(0.1, 0.10 + (r / ROWS) * 0.85)) : moisture;
+            // Factor Ambiental: Si el gradiente está activo se calcula por fila, si no usa la humedad global del slider
+            const currentMoisture = gradientEnabled ? Math.min(1.0, Math.max(0.1, 0.10 + (r / ROWS) * 0.85)) : moisture;
 
             for (let c = 0; c < COLS; c++) {
                 const idx = r * COLS + c;
                 const current = grid[idx];
 
+                // Conteo de vecinos (vecindario de Moore)
                 let nCrop = 0, nWeed = 0, nWoody = 0;
                 for (let dr = -1; dr <= 1; dr++) {
                     for (let dc = -1; dc <= 1; dc++) {
@@ -493,25 +495,21 @@
 
                 let nextVal = current;
 
-                // --- MODIFICADORES SEGÚN EL MANEJO ACTIVO ---
-                if (current === 0) { // Suelo desnudo
-                    let pCrop = (nCrop > 0) ? (nCrop / 8) * rowMoisture * nutrients * 0.40 : 0.015;
-                    let pWeed = (nWeed > 0) ? (nWeed / 8) * 0.45 + 0.03 : 0.03;
-                    let pWoody = (nWoody > 0) ? (nWoody / 8) * rowMoisture * 0.08 : 0.003;
+                // --- REGLAS VINCULADAS DIRECTAMENTE A AMBIENTE Y PASTOREO EN TIEMPO REAL ---
+                if (current === 0) { // Suelo Desnudo
+                    // Crecimiento acoplado a la multiplicación de Humedad x Nutrientes
+                    let pCrop = (nCrop > 0) ? (nCrop / 8) * currentMoisture * nutrients * 0.60 : 0.005;
+                    let pWeed = (nWeed > 0) ? (nWeed / 8) * 0.40 + (0.05 * (1 - nutrients)) : 0.02;
+                    let pWoody = (nWoody > 0) ? (nWoody / 8) * currentMoisture * 0.15 : 0.002;
 
+                    // Modificadores según régimen de manejo activo
                     if (activeRegime === 'overgrazing') {
                         pCrop *= 0.05; 
-                        pWeed *= 1.8;  
-                        pWoody *= 0.1; 
+                        pWeed *= 2.0; 
                     } else if (activeRegime === 'mbgi') {
-                        pCrop += 0.08; 
-                        pWoody += 0.04; 
-                        pWeed *= 0.4;
-                    } else if (activeRegime === 'direct_seeding') {
-                        pWeed *= 0.05; 
-                    } else if (activeRegime === 'service_crop') {
-                        pCrop += 0.20;
-                        pWeed *= 0.2;
+                        pCrop *= 1.3;
+                        pWoody *= 1.2;
+                        pWeed *= 0.3;
                     }
 
                     let rand = Math.random();
@@ -520,39 +518,28 @@
                     else if (rand < pCrop + pWeed + pWoody) nextVal = 3;
 
                 } else if (current === 1) { // Cultivo / Pasto
-                    let lossProb = grazing * 0.30;
-                    let weedInvasion = (nWeed / 8) * 0.25;
+                    // Pérdida vinculada DIRECTAMENTE al slider de Pastoreo (grazing) y sequía
+                    let droughtEffect = (1 - currentMoisture) * 0.25;
+                    let lossProb = (grazing * 0.50) + droughtEffect; 
+                    let weedInvasion = (nWeed / 8) * 0.30;
 
-                    if (activeRegime === 'overgrazing') {
-                        lossProb = 0.65; 
-                        weedInvasion *= 2.0;
-                    } else if (activeRegime === 'mbgi') {
-                        lossProb = 0.15; 
-                    }
+                    if (activeRegime === 'overgrazing') lossProb += 0.40;
 
-                    if (Math.random() < lossProb) nextVal = 0;
+                    if (Math.random() < lossProb) nextVal = 0; // Pasa a suelo desnudo por sobrepastoreo o sequía
                     else if (Math.random() < weedInvasion) nextVal = 2;
 
                 } else if (current === 2) { // Maleza
-                    let replaceByCrop = (nCrop / 8) * 0.15;
-                    let replaceByWoody = (nWoody / 8) * 0.08;
-
-                    if (activeRegime === 'overgrazing') {
-                        replaceByCrop *= 0.1; 
-                        replaceByWoody *= 0.1;
-                    } else if (activeRegime === 'mbgi') {
-                        replaceByCrop *= 1.8;
-                    }
-
+                    // Recuperación del cultivo si suben los nutrientes y la humedad
+                    let replaceByCrop = (nCrop / 8) * nutrients * currentMoisture * 0.30;
+                    let grazingDamage = grazing * 0.10;
+                    
                     if (Math.random() < replaceByCrop) nextVal = 1;
-                    else if (Math.random() < replaceByWoody) nextVal = 3;
+                    else if (Math.random() < grazingDamage && activeRegime === 'mbgi') nextVal = 0;
 
                 } else if (current === 3) { // Monte / Leñosa
-                    if (activeRegime === 'overgrazing') {
-                        if (Math.random() < 0.05) nextVal = 0;
-                    } else if (activeRegime === 'mbgi') {
-                        if (Math.random() < 0.005) nextVal = 1; 
-                    }
+                    // Sensible a sequías severas o presión extrema
+                    let dieback = (1 - currentMoisture) * 0.05 + (grazing > 0.8 ? 0.03 : 0.0);
+                    if (Math.random() < dieback) nextVal = 0;
                 }
 
                 nextGrid[idx] = nextVal;
@@ -561,7 +548,7 @@
 
         grid = [...nextGrid];
         render();
-        updateMetrics();
+        updateMetrics(); // Sincroniza tarjetas y gráfico en cada tick
     }
 
     function setRegime(regime, labelText) {
@@ -638,18 +625,18 @@
                 document.getElementById('sliderGrazing').value = 90;
                 document.getElementById('valGrazing').innerText = '90%';
                 setRegime('overgrazing', 'Sobrepastoreo Severo (Degradación)');
-                applyManagementDistribution(0.08, 0.45, 0.10); // Degrada pastura y leñosa, explotan malezas/suelo desnudo
+                applyManagementDistribution(0.08, 0.45, 0.10);
             };
             document.getElementById('btnMBGI').onclick = () => {
                 grazing = 0.25;
                 document.getElementById('sliderGrazing').value = 25;
                 document.getElementById('valGrazing').innerText = '25%';
                 setRegime('mbgi', 'MBGI (Ganadería Integrada Sostenible)');
-                applyManagementDistribution(0.40, 0.05, 0.45); // Coexistencia equilibrada de pasturas y estrato arbóreo
+                applyManagementDistribution(0.40, 0.05, 0.45);
             };
             document.getElementById('btnPruning').onclick = () => {
                 setRegime('mbgi', 'Raleo de dosel aplicado');
-                applyManagementDistribution(0.50, 0.10, 0.25); // Abre el dosel aumentando la cobertura de pastos
+                applyManagementDistribution(0.50, 0.10, 0.25);
             };
         }
     }
@@ -721,7 +708,7 @@
         clearInterval(timer);
     }
 
-    // EVENT LISTENERS
+    // EVENT LISTENERS DE CONTROLES Y SLIDERS
     document.getElementById('btnPresetMonocultura').onclick = () => loadSystem('monocultura');
     document.getElementById('btnPresetPolicultivo').onclick = () => loadSystem('policultivo');
     document.getElementById('btnPresetSilvopastoril').onclick = () => loadSystem('silvopastoril');
@@ -769,7 +756,7 @@
         updateMetrics();
     };
 
-    // Carga inicial
+    // Carga inicial al abrir la página
     loadSystem('monocultura');
 </script>
 </body>
