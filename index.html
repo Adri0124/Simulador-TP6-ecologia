@@ -59,7 +59,6 @@
             margin-bottom: 16px;
         }
 
-        /* Preset Buttons TopBar */
         .preset-bar {
             display: flex;
             gap: 10px;
@@ -83,7 +82,6 @@
             color: #38bdf8;
         }
 
-        /* Metrics Grid */
         .metrics-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -112,7 +110,6 @@
             font-weight: bold;
         }
 
-        /* Canvas */
         .canvas-container {
             position: relative;
             background: #1b2631;
@@ -129,7 +126,6 @@
             display: block;
         }
 
-        /* Controls Panel */
         .control-group {
             margin-bottom: 12px;
         }
@@ -178,6 +174,7 @@
         .btn-reset { background: #ef4444; color: #fff; }
         .btn-action { background: #334155; color: var(--text-main); border: 1px solid var(--border-color); }
         .btn-action-highlight { background: #1e3a8a; color: #38bdf8; border: 1px solid #3b82f6; }
+        .btn-action-danger { background: #7f1d1d; color: #fca5a5; border: 1px solid #ef4444; }
 
         .chart-container {
             position: relative;
@@ -209,6 +206,18 @@
         }
 
         .status-badge.active { display: block; }
+
+        .regime-label {
+            font-size: 0.75rem;
+            color: #e2e8f0;
+            background: #0f172a;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 8px;
+            display: block;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -273,7 +282,8 @@
 
         <!-- MANEJO Y DISTURBIOS DINÁMICOS -->
         <div class="card">
-            <span style="font-size: 0.8rem; color: var(--text-sub); font-weight: bold; display: block; margin-bottom: 10px;">OPCIONES DE MANEJO</span>
+            <span style="font-size: 0.8rem; color: var(--text-sub); font-weight: bold; display: block; margin-bottom: 6px;">ESTRATEGIA DE MANEJO</span>
+            <span id="activeRegimeLabel" class="regime-label">Régimen: Estándar / Sin Intervención</span>
             
             <div class="control-group">
                 <label>Presión de Pastoreo / Carga <span id="valGrazing">0%</span></label>
@@ -281,7 +291,7 @@
             </div>
 
             <div id="dynamicManagementControls" class="btn-grid-single">
-                <!-- Se genera dinámicamente según el sistema activo -->
+                <!-- Se genera dinámicamente -->
             </div>
         </div>
     </div>
@@ -357,10 +367,8 @@
     let grazing = 0.0;
     let gradientEnabled = false;
 
-    // Estados de manejo residual
-    let directSeedingMulchTimer = 0; // Siembra directa (rastrojo frena malezas)
-    let serviceCropActive = false;   // Cultivo de servicio
-    let mbgiActive = false;          // Manejo de Bosques con Ganadería Integrada
+    // REGÍMENES DE MANEJO ACTIVOS
+    let activeRegime = 'standard'; 
 
     const canvas = document.getElementById('gridCanvas');
     const ctx = canvas.getContext('2d');
@@ -452,21 +460,13 @@
         timeChart.update();
     }
 
-    // ALGORITMO DE EVOLUCIÓN DINÁMICA
     function stepSimulation() {
         stepCount++;
         document.getElementById('stepCounter').innerText = `Tiempo: ${stepCount} ciclos`;
 
         const badge = document.getElementById('statusBadge');
-        if (directSeedingMulchTimer > 0) {
-            directSeedingMulchTimer--;
-            badge.innerText = "Coagulación/Rastrojo Activo (Siembra Directa)";
-            badge.classList.add('active');
-        } else if (serviceCropActive) {
-            badge.innerText = "Cultivo de Servicios Co-existente";
-            badge.classList.add('active');
-        } else if (mbgiActive) {
-            badge.innerText = "Plan de Manejo MBGI Activo";
+        if (activeRegime !== 'standard') {
+            badge.innerText = `Régimen: ${document.getElementById('activeRegimeLabel').innerText.replace('Régimen: ', '')}`;
             badge.classList.add('active');
         } else {
             badge.classList.remove('active');
@@ -479,7 +479,6 @@
                 const idx = r * COLS + c;
                 const current = grid[idx];
 
-                // Contar vecinos
                 let nCrop = 0, nWeed = 0, nWoody = 0;
                 for (let dr = -1; dr <= 1; dr++) {
                     for (let dc = -1; dc <= 1; dc++) {
@@ -495,44 +494,66 @@
 
                 let nextVal = current;
 
-                // Dinámicas de crecimiento ajustadas para cambios continuos y visibles
-                if (current === 0) {
-                    let pCrop = (nCrop > 0) ? (nCrop / 8) * rowMoisture * nutrients * 0.45 : 0.02;
-                    let pWeed = (nWeed > 0) ? (nWeed / 8) * 0.40 + 0.03 : 0.025;
-                    let pWoody = (nWoody > 0) ? (nWoody / 8) * rowMoisture * 0.15 : 0.005;
+                // --- MODIFICADORES SEGÚN EL MANEJO ACTIVO ---
+                if (current === 0) { // Suelo desnudo
+                    let pCrop = (nCrop > 0) ? (nCrop / 8) * rowMoisture * nutrients * 0.40 : 0.015;
+                    let pWeed = (nWeed > 0) ? (nWeed / 8) * 0.45 + 0.03 : 0.03;
+                    let pWoody = (nWoody > 0) ? (nWoody / 8) * rowMoisture * 0.08 : 0.003;
 
-                    // Ajuste por Siembra Directa (rastrojo frena germinación de malezas)
-                    if (directSeedingMulchTimer > 0) pWeed *= 0.1;
-
-                    // Ajuste por Cultivo de Servicios
-                    if (serviceCropActive) { pCrop += 0.15; pWeed *= 0.3; }
+                    if (activeRegime === 'overgrazing') {
+                        pCrop *= 0.05; 
+                        pWeed *= 1.8;  
+                        pWoody *= 0.1; 
+                    } else if (activeRegime === 'mbgi') {
+                        pCrop += 0.08; 
+                        pWoody += 0.04; 
+                        pWeed *= 0.4;
+                    } else if (activeRegime === 'direct_seeding') {
+                        pWeed *= 0.05; 
+                    } else if (activeRegime === 'service_crop') {
+                        pCrop += 0.20;
+                        pWeed *= 0.2;
+                    }
 
                     let rand = Math.random();
                     if (rand < pCrop) nextVal = 1;
                     else if (rand < pCrop + pWeed) nextVal = 2;
                     else if (rand < pCrop + pWeed + pWoody) nextVal = 3;
 
-                } else if (current === 1) { // Cultivo/Pasto
-                    let weedInvasionProb = (nWeed / 8) * 0.25;
-                    if (currentSystem === 'monocultura') weedInvasionProb *= 1.8;
-                    if (serviceCropActive || directSeedingMulchTimer > 0) weedInvasionProb *= 0.2;
+                } else if (current === 1) { // Cultivo / Pasto
+                    let lossProb = grazing * 0.30;
+                    let weedInvasion = (nWeed / 8) * 0.25;
 
-                    if (Math.random() < grazing * 0.35) nextVal = 0;
-                    else if (Math.random() < weedInvasionProb) nextVal = 2;
+                    if (activeRegime === 'overgrazing') {
+                        lossProb = 0.65; 
+                        weedInvasion *= 2.0;
+                    } else if (activeRegime === 'mbgi') {
+                        lossProb = 0.15; 
+                    }
 
-                } else if (current === 2) { // Maleza/Acompañante
-                    let replaceByCrop = (nCrop / 8) * 0.18;
-                    let replaceByWoody = (nWoody / 8) * 0.10;
+                    if (Math.random() < lossProb) nextVal = 0;
+                    else if (Math.random() < weedInvasion) nextVal = 2;
 
-                    if (currentSystem === 'policultivo') replaceByCrop *= 1.5;
+                } else if (current === 2) { // Maleza
+                    let replaceByCrop = (nCrop / 8) * 0.15;
+                    let replaceByWoody = (nWoody / 8) * 0.08;
 
-                    if (Math.random() < grazing * 0.15) nextVal = 0;
-                    else if (Math.random() < replaceByCrop) nextVal = 1;
+                    if (activeRegime === 'overgrazing') {
+                        replaceByCrop *= 0.1; 
+                        replaceByWoody *= 0.1;
+                    } else if (activeRegime === 'mbgi') {
+                        replaceByCrop *= 1.8;
+                    }
+
+                    if (Math.random() < replaceByCrop) nextVal = 1;
                     else if (Math.random() < replaceByWoody) nextVal = 3;
 
-                } else if (current === 3) { // Monte/Leñosa
-                    // En MBGI o silvopastoril se equilibra con pasto
-                    if (grazing > 0.6 && !mbgiActive && Math.random() < 0.08) nextVal = 0; // Degradación por sobrepastoreo
+                } else if (current === 3) { // Monte / Leñosa
+                    if (activeRegime === 'overgrazing') {
+                        if (Math.random() < 0.05) nextVal = 0;
+                    } else if (activeRegime === 'mbgi') {
+                        if (Math.random() < 0.005) nextVal = 1; 
+                    }
                 }
 
                 nextGrid[idx] = nextVal;
@@ -544,7 +565,12 @@
         updateMetrics();
     }
 
-    // CONFIGURACIÓN DINÁMICA DE BOTONES DE MANEJO
+    function setRegime(regime, labelText) {
+        activeRegime = regime;
+        document.getElementById('activeRegimeLabel').innerText = `Régimen: ${labelText}`;
+    }
+
+    // CONTROLES DE MANEJO TRANSICIÓN CONTINUA
     function renderManagementControls() {
         const container = document.getElementById('dynamicManagementControls');
         container.innerHTML = '';
@@ -552,123 +578,64 @@
         if (currentSystem === 'monocultura') {
             container.innerHTML = `
                 <button id="btnConvTillage" class="btn-action">🚜 Labranza Convencional</button>
-                <button id="btnDirectSeeding" class="btn-action-highlight">🌱 Siembra Directa + Rastrojo</button>
+                <button id="btnDirectSeeding" class="btn-action-highlight">🌱 Siembra Directa (Rastrojo)</button>
                 <button id="btnServiceCrop" class="btn-action">🌾 Cultivo de Servicios</button>
             `;
-            document.getElementById('btnConvTillage').onclick = applyConvTillage;
-            document.getElementById('btnDirectSeeding').onclick = applyDirectSeeding;
-            document.getElementById('btnServiceCrop').onclick = applyServiceCrop;
+            document.getElementById('btnConvTillage').onclick = () => {
+                setRegime('standard', 'Labranza Convencional');
+            };
+            document.getElementById('btnDirectSeeding').onclick = () => {
+                setRegime('direct_seeding', 'Siembra Directa + Cobertura');
+            };
+            document.getElementById('btnServiceCrop').onclick = () => {
+                setRegime('service_crop', 'Cultivo de Servicios Activo');
+            };
 
         } else if (currentSystem === 'policultivo') {
             container.innerHTML = `
                 <button id="btnHarvest" class="btn-action">🧺 Cosecha Selectiva E1</button>
                 <button id="btnMulch" class="btn-action-highlight">✂️ Manejo Biomasa / Macheteo</button>
-                <button id="btnFire" class="btn-action">🔥 Quemado / Incendio</button>
+                <button id="btnFire" class="btn-action-danger">🔥 Quema / Incendio Prescripto</button>
             `;
-            document.getElementById('btnHarvest').onclick = applyHarvest;
-            document.getElementById('btnMulch').onclick = applyMulch;
-            document.getElementById('btnFire').onclick = applyFire;
+            document.getElementById('btnHarvest').onclick = () => {
+                setRegime('standard', 'Cosecha Realizada');
+            };
+            document.getElementById('btnMulch').onclick = () => {
+                setRegime('standard', 'Abonado por Mulch');
+            };
+            document.getElementById('btnFire').onclick = () => {
+                setRegime('standard', 'Impacto por Incendio');
+            };
 
         } else if (currentSystem === 'silvopastoril' || currentSystem === 'gradient') {
             container.innerHTML = `
-                <button id="btnOvergraze" class="btn-action">⚠️ Sobrepastoreo Severo</button>
+                <button id="btnOvergraze" class="btn-action-danger">⚠️ Sobrepastoreo Severo</button>
                 <button id="btnMBGI" class="btn-action-highlight">🌳 Manejo MBGI (Sostenible)</button>
                 <button id="btnPruning" class="btn-action">🪓 Raleo / Poda Arbórea</button>
             `;
-            document.getElementById('btnOvergraze').onclick = applyOvergraze;
-            document.getElementById('btnMBGI').onclick = applyMBGI;
-            document.getElementById('btnPruning').onclick = applyPruning;
+            document.getElementById('btnOvergraze').onclick = () => {
+                setRegime('overgrazing', 'Sobrepastoreo Severo (Degradación)');
+                grazing = 0.90;
+                document.getElementById('sliderGrazing').value = 90;
+                document.getElementById('valGrazing').innerText = '90%';
+            };
+            document.getElementById('btnMBGI').onclick = () => {
+                setRegime('mbgi', 'MBGI (Ganadería Integrada Sostenible)');
+                grazing = 0.25;
+                document.getElementById('sliderGrazing').value = 25;
+                document.getElementById('valGrazing').innerText = '25%';
+            };
+            document.getElementById('btnPruning').onclick = () => {
+                setRegime('mbgi', 'Raleo de dosel aplicado');
+            };
         }
-    }
-
-    // ACCIONES DE MANEJO
-    function applyConvTillage() {
-        for (let i = 0; i < TOTAL_CELLS; i++) {
-            if (grid[i] === 2 || grid[i] === 1) grid[i] = 0; // Limpia maleza y cultivo
-        }
-        directSeedingMulchTimer = 0;
-        serviceCropActive = false;
-        render(); updateMetrics();
-    }
-
-    function applyDirectSeeding() {
-        directSeedingMulchTimer = 35; // Frena malezas por varios ciclos
-        for (let i = 0; i < TOTAL_CELLS; i++) {
-            if (Math.random() < 0.40) grid[i] = 1; // Siembra directa de E1
-        }
-        render(); updateMetrics();
-    }
-
-    function applyServiceCrop() {
-        serviceCropActive = !serviceCropActive;
-        if (serviceCropActive) {
-            for (let i = 0; i < TOTAL_CELLS; i++) {
-                if (grid[i] === 0 && Math.random() < 0.50) grid[i] = 2; // Ocupa suelo libre con especie de cobertura
-            }
-        }
-        render(); updateMetrics();
-    }
-
-    function applyHarvest() {
-        for (let i = 0; i < TOTAL_CELLS; i++) {
-            if (grid[i] === 1) grid[i] = 0;
-        }
-        render(); updateMetrics();
-    }
-
-    function applyMulch() {
-        for (let i = 0; i < TOTAL_CELLS; i++) {
-            if (grid[i] === 2) grid[i] = 1; // Transforma biomasa acompañante en nutrientes/cultivo
-        }
-        render(); updateMetrics();
-    }
-
-    function applyFire() {
-        for (let i = 0; i < TOTAL_CELLS; i++) {
-            if (Math.random() < 0.85) grid[i] = 0;
-        }
-        render(); updateMetrics();
-    }
-
-    function applyOvergraze() {
-        grazing = 0.90;
-        document.getElementById('sliderGrazing').value = 90;
-        document.getElementById('valGrazing').innerText = '90%';
-        mbgiActive = false;
-        for (let i = 0; i < TOTAL_CELLS; i++) {
-            if (grid[i] === 1 && Math.random() < 0.70) grid[i] = 0;
-        }
-        render(); updateMetrics();
-    }
-
-    function applyMBGI() {
-        mbgiActive = !mbgiActive;
-        if (mbgiActive) {
-            grazing = 0.25; // Carga ganadera ajustada
-            document.getElementById('sliderGrazing').value = 25;
-            document.getElementById('valGrazing').innerText = '25%';
-            // Equilibrio: Conserva 30% monte E3 y promueve pasto E1
-            for (let i = 0; i < TOTAL_CELLS; i++) {
-                if (grid[i] === 0 && Math.random() < 0.30) grid[i] = 1;
-            }
-        }
-        render(); updateMetrics();
-    }
-
-    function applyPruning() {
-        for (let i = 0; i < TOTAL_CELLS; i++) {
-            if (grid[i] === 3 && Math.random() < 0.50) grid[i] = 1; // Poda del monte para abrir luz al pasto
-        }
-        render(); updateMetrics();
     }
 
     function loadSystem(systemType) {
         pause();
         currentSystem = systemType;
         stepCount = 0;
-        directSeedingMulchTimer = 0;
-        serviceCropActive = false;
-        mbgiActive = false;
+        setRegime('standard', 'Sin Intervención / Normal');
 
         document.getElementById('statusBadge').classList.remove('active');
         document.getElementById('stepCounter').innerText = `Tiempo: 0 ciclos`;
@@ -794,7 +761,7 @@
         updateMetrics();
     };
 
-    // Inicialización
+    // Carga inicial
     loadSystem('monocultura');
 </script>
 </body>
