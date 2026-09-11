@@ -376,7 +376,7 @@
     let gradientEnabled = false;
 
     let activeRegime = 'standard'; 
-    let activeSubActionId = null; // Control de selección visual activa
+    let activeSubActionId = null;
 
     const canvas = document.getElementById('gridCanvas');
     const ctx = canvas.getContext('2d');
@@ -509,13 +509,16 @@
 
                     if (activeRegime === 'overgrazing' || grazing > 0.70) {
                         pCrop *= 0.05; 
-                        pWeed *= 2.0; // Arbustización invasiva por sobrepastoreo
+                        pWeed *= 2.5; // Arbustización invasiva por sobrepastoreo severo
                         pWoody = 0.0; 
                     } else if (activeRegime === 'mbgi') {
-                        // MBGI: Favorece el establecimiento de renovales (E3) y arbustos menores/pioneras benéficas (E2)
-                        pCrop *= 1.2;
-                        pWoody *= 1.8; // Impulsa el renoval forestal
-                        pWeed *= 0.7;  // Controla la maleza estéril transformándola en arbustos menores
+                        // MBGI Conservacionista: Equilibrio homeostático, sin arbustización excesiva
+                        pCrop *= 1.1;
+                        pWoody *= 0.9;  // Contiene el avance desmedido del monte
+                        pWeed *= 0.4;   // Suprime la maleza y estabiliza arbustos menores benignos
+                    } else if (activeRegime === 'direct_seeding' || activeRegime === 'service_crop') {
+                        pCrop *= 1.4;
+                        pWeed *= 0.2;   // Cobertura amortigua la emergencia de malezas
                     }
 
                     let rand = Math.random();
@@ -529,20 +532,31 @@
                     let weedInvasion = (nWeed / 8) * 0.25;
 
                     if (activeRegime === 'overgrazing') lossProb += 0.45;
-                    if (activeRegime === 'mbgi') lossProb *= 0.6; // El MBGI protege la pastura mediante descanso rotativo
+                    if (activeRegime === 'mbgi' || activeRegime === 'direct_seeding' || activeRegime === 'service_crop') {
+                        lossProb *= 0.35; // Alta conservación y resiliencia del tapiz
+                        weedInvasion *= 0.4;
+                    }
 
                     if (Math.random() < lossProb) nextVal = 0;
                     else if (Math.random() < weedInvasion) nextVal = 2;
 
                 } else if (current === 2) { // Pioneras / Arbustos Menores
-                    let replaceByWoody = (nWoody / 8) * 0.15 + 0.02; // Facilita el paso hacia renoval
+                    let replaceByWoody = (nWoody / 8) * 0.15 + 0.02; 
                     let replaceByCrop = (nCrop / 8) * nutrients * 0.15;
+
+                    if (activeRegime === 'mbgi') {
+                        // En MBGI conservacionista se mantiene estable como estrato intermedio funcional sin arbustizarse
+                        replaceByWoody *= 0.3; 
+                        replaceByCrop *= 1.2;
+                    }
 
                     if (Math.random() < replaceByWoody) nextVal = 3;
                     else if (Math.random() < replaceByCrop) nextVal = 1;
 
                 } else if (current === 3) { // Monte / Renoval
                     let dieback = (1 - currentMoisture) * 0.03 + (grazing > 0.70 ? 0.06 : 0.005);
+                    if (activeRegime === 'mbgi') dieback *= 0.5; // Estabilidad del bosque integrado
+                    
                     if (Math.random() < dieback) nextVal = 0;
                 }
 
@@ -562,7 +576,6 @@
         activeSubActionId = buttonId;
         document.getElementById('activeRegimeLabel').innerText = `Régimen: ${labelText}`;
         
-        // Actualizar estado visual de los botones de manejo
         document.querySelectorAll('#dynamicManagementControls button').forEach(btn => {
             if (btn.id === 'btnToggleGradient') return;
             if (btn.id === buttonId) {
@@ -617,31 +630,31 @@
         if (currentSystem === 'monocultura') {
             container.innerHTML = `
                 <button id="btnConvTillage" class="btn-action" data-default-class="btn-action">🚜 Labranza Convencional</button>
-                <button id="btnDirectSeeding" class="btn-action" data-default-class="btn-action">🌱 Siembra Directa (Rastrojo)</button>
+                <button id="btnDirectSeeding" class="btn-action" data-default-class="btn-action">🌱 Siembra Directa (Conservacionista)</button>
                 <button id="btnServiceCrop" class="btn-action" data-default-class="btn-action">🌾 Cultivo de Servicios</button>
             `;
             container.appendChild(gradBtn);
 
             document.getElementById('btnConvTillage').onclick = () => { setRegime('standard', 'Labranza Convencional', 'btnConvTillage'); applyManagementDistribution(0.40, 0.10, 0.0); };
-            document.getElementById('btnDirectSeeding').onclick = () => { setRegime('direct_seeding', 'Siembra Directa + Cobertura', 'btnDirectSeeding'); applyManagementDistribution(0.65, 0.02, 0.0); };
-            document.getElementById('btnServiceCrop').onclick = () => { setRegime('service_crop', 'Cultivo de Servicios Activo', 'btnServiceCrop'); applyManagementDistribution(0.80, 0.05, 0.0); };
+            document.getElementById('btnDirectSeeding').onclick = () => { setRegime('direct_seeding', 'Siembra Directa Conservacionista', 'btnDirectSeeding'); applyManagementDistribution(0.70, 0.02, 0.0); };
+            document.getElementById('btnServiceCrop').onclick = () => { setRegime('service_crop', 'Cultivo de Servicios Activo', 'btnServiceCrop'); applyManagementDistribution(0.80, 0.03, 0.0); };
 
         } else if (currentSystem === 'policultivo') {
             container.innerHTML = `
                 <button id="btnHarvest" class="btn-action" data-default-class="btn-action">🧺 Cosecha Selectiva E1</button>
-                <button id="btnMulch" class="btn-action" data-default-class="btn-action">✂️ Manejo Biomasa / Macheteo</button>
+                <button id="btnMulch" class="btn-action" data-default-class="btn-action">✂️ Manejo Conservacionista / Mulch</button>
                 <button id="btnFire" class="btn-action-danger" data-default-class="btn-action-danger">🔥 Quema / Incendio Prescripto</button>
             `;
             container.appendChild(gradBtn);
 
             document.getElementById('btnHarvest').onclick = () => { setRegime('standard', 'Cosecha Realizada', 'btnHarvest'); applyManagementDistribution(0.10, 0.30, 0.20); };
-            document.getElementById('btnMulch').onclick = () => { setRegime('standard', 'Abonado por Mulch', 'btnMulch'); applyManagementDistribution(0.50, 0.15, 0.20); };
+            document.getElementById('btnMulch').onclick = () => { setRegime('service_crop', 'Manejo Conservacionista por Mulch', 'btnMulch'); applyManagementDistribution(0.55, 0.15, 0.15); };
             document.getElementById('btnFire').onclick = () => { setRegime('standard', 'Impacto por Incendio', 'btnFire'); applyManagementDistribution(0.05, 0.10, 0.05); };
 
         } else if (currentSystem === 'silvopastoril') {
             container.innerHTML = `
                 <button id="btnOvergraze" class="btn-action-danger" data-default-class="btn-action-danger">⚠️ Sobrepastoreo Severo (Arbustización)</button>
-                <button id="btnMBGI" class="btn-action" data-default-class="btn-action">🌳 Manejo MBGI (Renoval y Pastura)</button>
+                <button id="btnMBGI" class="btn-action" data-default-class="btn-action">🌳 Manejo MBGI Conservacionista</button>
                 <button id="btnPruning" class="btn-action" data-default-class="btn-action">🪓 Raleo / Poda Arbórea</button>
             `;
             container.appendChild(gradBtn);
@@ -654,11 +667,11 @@
                 applyManagementDistribution(0.05, 0.55, 0.15);
             };
             document.getElementById('btnMBGI').onclick = () => {
-                grazing = 0.25;
-                document.getElementById('sliderGrazing').value = 25;
-                document.getElementById('valGrazing').innerText = '25%';
-                setRegime('mbgi', 'MBGI (Renoval, Arbustos Menores y Pastura)', 'btnMBGI');
-                applyManagementDistribution(0.35, 0.15, 0.35);
+                grazing = 0.20;
+                document.getElementById('sliderGrazing').value = 20;
+                document.getElementById('valGrazing').innerText = '20%';
+                setRegime('mbgi', 'MBGI Conservacionista (Equilibrio Estable)', 'btnMBGI');
+                applyManagementDistribution(0.40, 0.15, 0.30);
             };
             document.getElementById('btnPruning').onclick = () => {
                 setRegime('mbgi', 'Raleo de dosel aplicado', 'btnPruning');
@@ -666,7 +679,6 @@
             };
         }
 
-        // Restaurar estado visual activo si existía
         if (activeSubActionId) {
             const activeBtn = document.getElementById(activeSubActionId);
             if (activeBtn) activeBtn.className = 'btn-action-highlight';
